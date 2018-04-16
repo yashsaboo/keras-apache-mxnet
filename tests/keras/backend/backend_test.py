@@ -1194,17 +1194,17 @@ class TestBackend(object):
                      K.variable(np.ones((2, 2, 2, 3, 4))),
                      data_format='channels_middle')
 
-        if K.backend() != 'theano' and K.backend() != 'mxnet':
+        if K.backend() != 'theano':
             with pytest.raises(ValueError):
                 K.separable_conv2d(K.variable(np.ones((2, 3, 4, 5))),
                                    K.variable(np.ones((2, 2, 3, 4))),
                                    K.variable(np.ones((1, 1, 12, 7))),
                                    data_format='channels_middle')
-        if K.backend() != 'mxnet':
-            with pytest.raises(ValueError):
-                K.depthwise_conv2d(K.variable(np.ones((2, 3, 4, 5))),
-                                   K.variable(np.ones((2, 2, 3, 4))),
-                                   data_format='channels_middle')
+
+        with pytest.raises(ValueError):
+            K.depthwise_conv2d(K.variable(np.ones((2, 3, 4, 5))),
+                               K.variable(np.ones((2, 2, 3, 4))),
+                               data_format='channels_middle')
 
     def test_pooling_invalid_use(self):
         for (input_shape, pool_size) in zip([(5, 10, 12, 3), (5, 10, 12, 6, 3)], [(2, 2), (2, 2, 2)]):
