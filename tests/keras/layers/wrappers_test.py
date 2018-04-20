@@ -16,6 +16,10 @@ pytestmark = pytest.mark.skipif(K.backend() == 'mxnet',
                                 reason='MXNet backend does not support TimeDistributed and RNN yet')
 
 
+pytestmark = pytest.mark.skipif(K.backend() == 'mxnet',
+                                reason='MXNet backend does not support TimeDistributed and RNN yet')
+
+
 @keras_test
 def test_TimeDistributed():
     # first, test with Dense layer
