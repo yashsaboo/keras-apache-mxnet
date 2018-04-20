@@ -6,15 +6,12 @@ https://github.com/tensorflow/benchmarks/blob/keras-benchmarks/scripts/keras_ben
 
 from __future__ import print_function
 
-import logging
 import time
 
 import numpy as np
-from logging_metrics import LoggingMetrics
-from models.timehistory import TimeHistory
+from models import timehistory
 
 import keras
-from keras import backend as K
 
 
 def crossentropy_from_logits(y_true, y_pred):
@@ -34,16 +31,7 @@ class Resnet50Benchmark:
         self.num_samples = 1000
         self.test_type = 'tf.keras, eager_mode'
 
-    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False, epochs=20):
-        self.epochs = epochs
-        if gpus > 1:
-            self.batch_size = self.batch_size * gpus
-
-        # prepare logging
-        # file name: backend_data_format_dataset_model_batch_size_gpus.log
-        log_file = K.backend() + '_' + K.image_data_format() + '_synthetic_resnet50_batch_size_' + str(self.batch_size) + '_' + str(gpus) + 'gpus.log'  # nopep8
-        logging.basicConfig(level=logging.INFO, filename=log_file)
-
+    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False):
         print("Running model ", self.test_name)
         keras.backend.set_learning_phase(True)
 
@@ -74,7 +62,7 @@ class Resnet50Benchmark:
         model = keras.models.Model(inputs, predictions)
         # use multi gpu model for more than 1 gpu
         if (keras.backend.backend() == "tensorflow" or keras.backend.backend() == "mxnet") and gpus > 1:
-            model = keras.utils.multi_gpu_model(model, gpus=gpus, cpu_merge=False)
+            model = keras.utils.multi_gpu_model(model, gpus=gpus)
 
         if inference:
             times = []
@@ -90,11 +78,13 @@ class Resnet50Benchmark:
             model.compile(loss='categorical_crossentropy',
                           optimizer=keras.optimizers.RMSprop(lr=0.0001),
                           metrics=['accuracy'])
-            time_callback = TimeHistory()
-            callbacks = [time_callback]
-            batch_size = self.batch_size * gpus if gpus > 0 else self.batch_size
-            history_callback = model.fit(x_train, y_train, batch_size=batch_size, epochs=self.epochs,
-                                         shuffle=True, callbacks=callbacks)
 
-        logg = LoggingMetrics(history_callback, time_callback)
-        logg.save_metrics_to_log(logging)
+            time_callback = timehistory.TimeHistory()
+            batch_size = self.batch_size * gpus if gpus > 0 else self.batch_size
+            model.fit(x_train, y_train, batch_size=batch_size, epochs=self.epochs,
+                      shuffle=True, callbacks=[time_callback])
+
+            self.total_time = 0
+            print(time_callback.times)
+            for i in range(1, self.epochs):
+                self.total_time += time_callback.times[i]

@@ -493,26 +493,28 @@ def test_model_methods():
         RandomSequence(batch_size, sequence_length=sequence_length))
     assert np.shape(out[0]) == shape_0 and np.shape(out[1]) == shape_1
 
-    # Create a model with a single output.
-    single_output_model = Model([a, b], a_2)
-    single_output_model.compile(optimizer, loss,
-                                metrics=[], sample_weight_mode=None)
+    # MXNet backend does not support multi-input model yet.
+    # Tracked in the issue - https://github.com/deep-learning-tools/keras/issues/20
+    if K.backend() != 'mxnet':
+        # Create a model with a single output.
+        single_output_model = Model([a, b], a_2)
+        single_output_model.compile(optimizer, loss, metrics=[], sample_weight_mode=None)
 
-    # Single output and one step.
-    batch_size = 5
-    sequence_length = 1
-    shape_0, _ = expected_shape(batch_size, sequence_length)
-    out = single_output_model.predict_generator(
-        RandomSequence(batch_size, sequence_length=sequence_length))
-    assert np.shape(out) == shape_0
+        # Single output and one step.
+        batch_size = 5
+        sequence_length = 1
+        shape_0, _ = expected_shape(batch_size, sequence_length)
+        out = single_output_model.predict_generator(RandomSequence(batch_size,
+                                                    sequence_length=sequence_length))
+        assert np.shape(out) == shape_0
 
-    # Single output and multiple steps.
-    batch_size = 5
-    sequence_length = 2
-    shape_0, _ = expected_shape(batch_size, sequence_length)
-    out = single_output_model.predict_generator(
-        RandomSequence(batch_size, sequence_length=sequence_length))
-    assert np.shape(out) == shape_0
+        # Single output and multiple steps.
+        batch_size = 5
+        sequence_length = 2
+        shape_0, _ = expected_shape(batch_size, sequence_length)
+        out = single_output_model.predict_generator(RandomSequence(batch_size,
+                                                    sequence_length=sequence_length))
+        assert np.shape(out) == shape_0
 
 
 @pytest.mark.skipif(sys.version_info < (3,),
