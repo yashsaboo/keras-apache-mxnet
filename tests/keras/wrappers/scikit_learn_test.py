@@ -6,6 +6,7 @@ from keras.utils.test_utils import get_test_data
 from keras.models import Sequential
 from keras.layers.core import Dense, Activation
 from keras.wrappers.scikit_learn import KerasClassifier, KerasRegressor
+from keras import backend as K
 
 input_dim = 5
 hidden_dims = 5
@@ -123,6 +124,9 @@ def build_fn_reg(hidden_dims=50):
     return model
 
 
+# https://github.com/deep-learning-tools/keras/issues/24
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not support None as placeholder dimension yet.')
 def test_regression_build_fn():
     reg = KerasRegressor(
         build_fn=build_fn_reg, hidden_dims=hidden_dims,
@@ -131,6 +135,9 @@ def test_regression_build_fn():
     assert_regression_works(reg)
 
 
+# https://github.com/deep-learning-tools/keras/issues/24
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not support None as placeholder dimension yet.')
 def test_regression_class_build_fn():
     class ClassBuildFnReg(object):
 
@@ -144,6 +151,9 @@ def test_regression_class_build_fn():
     assert_regression_works(reg)
 
 
+# https://github.com/deep-learning-tools/keras/issues/24
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not support None as placeholder dimension yet.')
 def test_regression_inherit_class_build_fn():
     class InheritClassBuildFnReg(KerasRegressor):
 

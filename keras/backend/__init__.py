@@ -24,7 +24,7 @@ else:
     _keras_dir = os.path.join(_keras_base_dir, '.keras')
 
 # Default backend: TensorFlow.
-_BACKEND = 'tensorflow'
+_BACKEND = 'mxnet'
 
 # Attempt to read Keras config file.
 _config_path = os.path.expanduser(os.path.join(_keras_dir, 'keras.json'))
@@ -87,6 +87,9 @@ elif _BACKEND == 'theano':
 elif _BACKEND == 'tensorflow':
     sys.stderr.write('Using TensorFlow backend.\n')
     from .tensorflow_backend import *
+elif _BACKEND == 'mxnet':
+    sys.stderr.write('Using MXNet backend\n')
+    from .mxnet_backend import *
 else:
     # Try and load external backend.
     try:

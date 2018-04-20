@@ -557,6 +557,8 @@ def test_warnings():
     assert all(['Sequence' not in str(w_.message) for w_ in w]), 'A warning was raised for Sequence.'
 
 
+@pytest.mark.skipif(K.backend() != 'tensorflow',
+                    reason='sparse operations supported only by TensorFlow')
 @keras_test
 def test_sparse_inputs_targets():
     test_inputs = [sparse.random(6, 3, density=0.25).tocsr() for _ in range(2)]
@@ -797,6 +799,8 @@ def test_model_with_input_feed_tensor():
     assert out.shape == (10 * 3, 4)
 
 
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not support models with partial loss yet.')
 @keras_test
 def test_model_with_partial_loss():
     a = Input(shape=(3,), name='input_a')
@@ -840,8 +844,8 @@ def test_model_with_partial_loss():
 
 
 @keras_test
-@pytest.mark.skipif((K.backend() == 'cntk'),
-                    reason='cntk does not support external loss yet')
+@pytest.mark.skipif((K.backend() == 'cntk' or K.backend() == 'mxnet'),
+                    reason='cntk/mxnet do not support external loss yet')
 def test_model_with_external_loss():
     # None loss, only regularization loss.
     a = Input(shape=(3,), name='input_a')
