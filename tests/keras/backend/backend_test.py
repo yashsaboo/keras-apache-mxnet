@@ -1157,7 +1157,7 @@ class TestBackend(object):
 <<<<<<< HEAD
 =======
 
-    @pytest.mark.skipif(K.backend() == 'theano', reason='Not supported.')
+    @pytest.mark.skipif(K.backend() == 'theano' or K.backend() == 'mxnet', reason='Not supported.')
     @pytest.mark.parametrize('op,input_shape,kernel_shape,depth_multiplier,padding,data_format', [
         ('separable_conv2d', (2, 3, 4, 5), (3, 3), 1, 'same', 'channels_first'),
         ('separable_conv2d', (2, 3, 5, 6), (4, 3), 2, 'valid', 'channels_first'),

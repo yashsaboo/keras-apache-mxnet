@@ -2761,7 +2761,7 @@ def in_test_phase(x, alt, training=None):
     # Returns
         Either `x` or `alt` based on `K.learning_phase`.
     """
-    raise in_train_phase(alt, x, training=training)
+    return in_train_phase(alt, x, training=training)
 
 
 # NN OPERATIONS
