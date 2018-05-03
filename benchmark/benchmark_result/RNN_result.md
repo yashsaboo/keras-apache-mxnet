@@ -1,59 +1,5 @@
-# RNN Benchmark Results (Experimental support)
-
-## Summary
-```
-    NOTE:
-        RNN support in Keras-MXNet is experimental with few rough edges on CPU training performance and no support for 
-        variable length sequences. Below results are only early preview of the current status.
-```
-
-Please see [RNN with Keras-MXNet document](../docs/mxnet_backend/using_rnn_with_mxnet_backend.md) for more details on
- the poor CPU training performance and unsupported functionalities. 
-
- ### Configuration
-|                  |                                                              |
-| :--------------- | :----------------------------------------------------------- |
-| Keras            | v2.1.6                                                       |
-| TensorFlow       | v1.8.0                                                       |
-| MXNet            | v1.2.0                                                       |
-| CUDA             | v9.0.176                                                     |
-| cuDNN            | v7.0.1                                                       |
-
-### LSTM-Nietzsche
-
-| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)   | Keras-TensorFlow (Time/Epoch), (GPU Mem)   |
-|---|---|---|---|---|
-|  C5.18X Large | 0  | 128  | 78 sec, N/A | 55 sec, N/A|
-|  P3.8X Large |  1 |  128 | 52 sec, 792 MB | 83 sec, 15360 MB|
-|  P3.8X Large | 4  | 128  | 47 sec, 770 MB | 117 sec, 15410 MB |
-|  P3.16X Large | 8  | 128  | 72 sec, 826 MB | 183sec, 15408TBD |
-
-### LSTM-WikiText2
-
-| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)  | Keras-TensorFlow (Time/Epoch), (GPU Mem)  |
-|---|---|---|---|---|
-|  C5.18X Large | 0  | 128  | 1345 sec, N/A  | 875, N/A  |
-|  P3.8X Large |  1 |  128 | 868 sec, 772 MB | 817, 15360 MB  |
-|  P3.8X Large | 4  | 128  | 775 sec, 764 MB | 1468, 15410 MB  |
-|  P3.16X Large | 8  | 128  | 1214 sec, 826 MB | 3176 sec, 15410 MB |
-
-### Synthetic Data
-
-| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)   | Keras-TensorFlow (Time/Epoch), (GPU Mem)   |
-|---|---|---|---|---|
-|  C5.18X Large | 0  | 128  | 24 sec, N/A | 14 sec, N/A|
-|  P3.8X Large |  1 |  128 | 13 sec, 792 MB | 12 sec, 15360 MB|
-|  P3.8X Large | 4  | 128  | 12 sec, 770 MB | 21 sec, 15410 MB |
-|  P3.16X Large | 8  | 128  | 19 sec, 826 MB | 49 sec, 15360 MB |
-
-
 # Detailed RNN Benchmark Results
 
-Below is the result of GPU memory usage while running LSTM model on Synthetic, Nietzsche, and WikiText-2 character level dataset.
-
-![MemoryConsumption.png](MemoryConsumption.png)
-
-Note: All the data for performance diagram shown below is taken from the cell having `unroll Type=True`
 ## Synthetic Dataset
 
 ### Configuration
@@ -70,11 +16,6 @@ Note: All the data for performance diagram shown below is taken from the cell ha
 
 
 ### Results
-
-|                                                          |                                                              |
-| :------------------------------------------------------- | :----------------------------------------------------------- |
-| ![lstm_Synthetic_32.png](lstm_Synthetic_32.png)          | ![lstm_Synthetic_128.png](lstm_Synthetic_128.png)            |
-
 
 | Instance    | GPUs | Backend    | Batch size | Data Set  | Training  Method | Speed/Epoch (Lower is better) | Unroll Type | No. of samples | Memory(MiB) |
 | ----------- | ---- | ---------- | ---------- | --------- | ---------------- | ----------------------------- | ----------- | -------------- | ----------- |
@@ -124,11 +65,6 @@ Note: All the data for performance diagram shown below is taken from the cell ha
 
 ### Results
 
-|                                                          |                                                              |
-| :------------------------------------------------------- | :----------------------------------------------------------- |
-| ![lstm_Nietzsche_32.png](lstm_Nietzsche_32.png)          | ![lstm_Nietzsche_128.png](lstm_Nietzsche_128.png)            |
-
-
 | Instance    | GPUs | Backend    | Batch size | Data Set  | Training  Method | Speed/Epoch (Lower is better) | Unroll Type | No. of samples | Memory(MiB) |
 | ----------- | ---- | ---------- | ---------- | --------- | ---------------- | ----------------------------- | ----------- | -------------- | ----------- |
 | C5.18xLarge | 0    | MXNet      | 32         | Nietzsche | fit()            | 226s 1ms/step                 | TRUE        | 200285         | 0           |
@@ -176,11 +112,6 @@ Note: All the data for performance diagram shown below is taken from the cell ha
 | Training Scripts | [lstm_text_generation](https://github.com/awslabs/keras-apache-mxnet/blob/master/benchmark/scripts/models/lstm_text_generation.py) |
 
 ### Results
-
-|                                                          |                                                              |
-| :------------------------------------------------------- | :----------------------------------------------------------- |
-| ![lstm_Wikitext2_32.png](lstm_Wikitext2_32.png)          | ![lstm_Wikitext2_128.png](lstm_Wikitext2_128.png)            |
-
 
 | Instance    | GPUs | Backend    | Batch size | Data Set   | Training  Method | Speed/Epoch (Lower is better) | Unroll Type | No. of samples | Memory(MiB) |
 | ----------- | ---- | ---------- | ---------- | ---------- | ---------------- | ----------------------------- | ----------- | -------------- | ----------- |
