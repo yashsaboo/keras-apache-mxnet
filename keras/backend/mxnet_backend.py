@@ -3501,6 +3501,28 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     return KerasSymbol(sym)
 
 
+# CTC(Connectionist Temporal Classification)
+
+def ctc_batch_cost(y_true, y_pred, input_length, label_length):
+    """Runs CTC loss algorithm on each batch element.
+
+    # Arguments
+        y_true: tensor `(samples, max_string_length)`
+            containing the truth labels.
+        y_pred: tensor `(samples, time_steps, num_categories)`
+            containing the prediction, or output of the softmax.
+        input_length: tensor `(samples, 1)` containing the sequence length for
+            each batch item in `y_pred`.
+        label_length: tensor `(samples, 1)` containing the sequence length for
+            each batch item in `y_true`.
+
+    # Returns
+        Tensor with shape (samples,1) containing the
+            CTC loss of each element.
+    """
+    raise NotImplementedError("MXNet Backend: CTC is not supported yet.")
+
+
 # HIGH ORDER FUNCTIONS
 
 def map_fn(fn, elems, name=None, dtype=None):
