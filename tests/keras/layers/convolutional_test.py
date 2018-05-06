@@ -239,7 +239,6 @@ def test_conv2d_transpose():
                                                           batch_input_shape=(None, None, 5, None))])
 
 
-@pytest.mark.skipif(K.backend() != 'tensorflow', reason='Requires TF backend')
 @keras_test
 def test_separable_conv_1d():
     num_samples = 2
@@ -254,6 +253,8 @@ def test_separable_conv_1d():
                     if padding == 'same' and strides != 1:
                         continue
                     if dilation_rate != 1 and strides != 1:
+                        continue
+                    if dilation_rate != 1 and K.backend() == 'cntk':
                         continue
 
                     layer_test(convolutional.SeparableConv1D,
