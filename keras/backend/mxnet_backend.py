@@ -4205,7 +4205,9 @@ def _convnd(x, kernel, strides, filter_dilation, name=None, padding_mode='valid'
             'to transform `channels_last` data to `channels_first` format and '
             'also please change the `image_data_format` in `keras.json` to '
             '`channels_first`.'
-            'Note: `x_input` is a Numpy tensor or a list of Numpy tensor',
+            'Note: `x_input` is a Numpy tensor or a list of Numpy tensor'
+            'Refer to: '
+            'https://github.com/awslabs/keras-apache-mxnet/tree/master/mxnet_backend_docs/performance_tips.md',
             stacklevel=2)
 
     # Handle Data Format

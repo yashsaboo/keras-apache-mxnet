@@ -42,7 +42,7 @@ Compare to CIFAR-10, you need to provide additional params: training mode and pa
 
 Example usage:
 
-`python benchmark_resnet.py --dataset imagenet --mxnet_backend_training_speed.pngversion 1 -layers 56 --gpus 4 --epoch 20 --train_mode train_on_batch --data_path home/ubuntu/imagenet/train/`
+`python benchmark_resnet.py --dataset imagenet --version 1 -layers 56 --gpus 4 --epoch 20 --train_mode train_on_batch --data_path home/ubuntu/imagenet/train/`
 
 ### Synthetic Dataset
 We used benchmark scripts from 
