@@ -165,7 +165,7 @@ sudo python setup.py install
 ------------------
 
 
-## Switching from MXNet to TensorFlow, CNTK or Theano
+## Configuring your Keras backend
 
 By default, Keras-MXNet will use MXNet as its tensor manipulation library. [Follow these instructions](https://keras.io/backend/) to configure the Keras backend.
 
