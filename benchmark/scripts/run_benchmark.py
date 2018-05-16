@@ -29,7 +29,7 @@ parser.add_argument('--dry_run', type=bool,
                          'uploading metrics to BigQuery. This is useful when '
                          'you are testing new models and do not want data '
                          'corruption.')
-parser.add_argument('--epochs',
+parser.add_argument('--epochs', default=20,
                     help='Number of epochs')
 
 args = parser.parse_args()

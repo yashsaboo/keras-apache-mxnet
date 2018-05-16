@@ -1,13 +1,10 @@
 """Trains a ResNet on the ImageNet/CIFAR10 dataset.
-
 Credit:
 Script modified from examples/cifar10_resnet.py
-
 Reference:
 ResNet v1
 [a] Deep Residual Learning for Image Recognition
 https://arxiv.org/pdf/1512.03385.pdf
-
 ResNet v2
 [b] Identity Mappings in Deep Residual Networks
 https://arxiv.org/pdf/1603.05027.pdf
@@ -21,6 +18,7 @@ import os
 import random
 import sys
 import time
+import logging
 
 import numpy as np
 from models.resnet import get_resnet_model
@@ -33,6 +31,8 @@ from keras.datasets import cifar10
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from keras.utils import multi_gpu_model
+from logging_metrics import LoggingMetrics
+from models.timehistory import TimeHistory
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset',
@@ -92,6 +92,12 @@ subtract_pixel_mean = True
 use_parallel_model = True if K.backend() == 'tensorflow' and num_gpus > 1 else False
 if use_parallel_model:
     import tensorflow as tf
+
+# prepare logging
+# file name: backend_data_format_dataset_model_batch_size_gpus.log
+log_file = K.backend() + '_' + K.image_data_format() + '_' + args.dataset + '_resnet_v' + args.version + \
+'_' + args.layers + '_batch_size' + str(batch_size) + '_' + str(num_gpus) + 'gpus.log'
+logging.basicConfig(level=logging.INFO, filename=log_file)
 
 # Prepare Training Data
 # CIFAR10 data set
@@ -211,13 +217,10 @@ model_type = 'ResNet%dv%d' % (depth, version)
 
 def lr_schedule(epoch):
     """Learning Rate Schedule
-
     Learning rate is scheduled to be reduced after 80, 120, 160, 180 epochs.
     Called automatically every epoch as part of callbacks during training.
-
     # Arguments
         epoch (int): The number of epochs
-
     # Returns
         lr (float32): learning rate
     """
@@ -284,7 +287,8 @@ lr_reducer = ReduceLROnPlateau(factor=np.sqrt(0.1),
                                patience=5,
                                min_lr=0.5e-6)
 
-callbacks = [checkpoint, lr_reducer, lr_scheduler]
+time_callback = TimeHistory()
+callbacks = [checkpoint, lr_reducer, lr_scheduler, time_callback]
 
 # Run training, without data augmentation.
 if args.dataset == "imagenet":
@@ -320,19 +324,23 @@ else:
     if use_parallel_model:
         # not saving model due to Keras issue 8123:
         # https://github.com/keras-team/keras/issues/8123
-        parallel_model.fit(x_train, y_train,
-                           batch_size=batch_size,
-                           epochs=epochs,
-                           validation_data=(x_test, y_test),
-                           shuffle=True,
-                           callbacks=[lr_reducer, lr_scheduler])
+        history_callback = parallel_model.fit(x_train, y_train,
+                                              batch_size=batch_size,
+                                              epochs=epochs,
+                                              validation_data=(x_test, y_test),
+                                              shuffle=True,
+                                              verbose=0,
+                                              callbacks=[lr_reducer, lr_scheduler, time_callback])
     else:
-        model.fit(x_train, y_train,
-                  batch_size=batch_size,
-                  epochs=epochs,
-                  validation_data=(x_test, y_test),
-                  shuffle=True,
-                  callbacks=callbacks)
+        history_callback = model.fit(x_train, y_train,
+                                     batch_size=batch_size,
+                                     epochs=epochs,
+                                     validation_data=(x_test, y_test),
+                                     shuffle=True,
+                                     verbose=0,
+                                     callbacks=callbacks)
+        logg = LoggingMetrics(history_callback, time_callback)
+        logg.save_metrics_to_log(logging)
 
 # Score trained model.
 scores = model.evaluate(x_test, y_test, verbose=1)
