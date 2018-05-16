@@ -4400,7 +4400,7 @@ def get_model():
             self._module = None
 
             # Create Module for Inference
-            self._compiled = False
+            self.compiled = False
             self._create_predict_module()
 
         def compile(self, optimizer, loss, metrics=None, loss_weights=None,
@@ -4481,7 +4481,7 @@ def get_model():
                 context=self._context,
                 fixed_param_names=self._fixed_weights)
             set_model(self)
-            self._compiled = True
+            self.compiled = True
 
         def _adjust_module(self, inputs, phase):
             if not self._module:
@@ -4507,7 +4507,7 @@ def get_model():
 
             if not self._module.binded:
                 # allow prediction without compiling the model using different binding
-                if not self._compiled and phase == 'pred':
+                if not self.compiled and phase == 'pred':
                     self._module.bind(data_shapes=data_shapes, label_shapes=None,
                                       for_training=False)
                     self._set_weights()
@@ -4592,7 +4592,7 @@ def get_model():
         def _make_predict_function(self):
             def predict_function(inputs):
                 # used predict only module if predict is called without compile
-                if not self._compiled:
+                if not self.compiled:
                     self._module = self._predict_only_module
                     set_model(self)
 
