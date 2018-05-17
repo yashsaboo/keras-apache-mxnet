@@ -1,3 +1,44 @@
+# RNN Benchmark Results (Experimental support)
+
+## Summary
+```
+    NOTE:
+        RNN support in Keras-MXNet is experimental with few rough edges on CPU training performance and no support for 
+        variable length sequences. Below results are only early preview of the current status.
+```
+
+Please see [RNN with Keras-MXNet document](../docs/mxnet_backend/using_rnn_with_mxnet_backend.md) for more details on
+ the poor CPU training performance and unsupported functionalities. 
+ 
+
+### LSTM-Nietzsche
+
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)   | Keras-TensorFlow (Time/Epoch), (GPU Mem)   |
+|---|---|---|---|---|
+|  C5.18X Large | 0  | 128  | 78 sec, N/A | 55 sec, N/A|
+|  P3.8X Large |  1 |  128 | 52 sec, 792 MB | 51 sec, 15360 MB|
+|  P3.8X Large | 4  | 128  | 47 sec, 770 MB | 87 sec, 15410 MB |
+|  P3.16X Large | 8  | 128  | TBD | TBD |
+
+### LSTM-WikiText2
+
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)  | Keras-TensorFlow (Time/Epoch), (GPU Mem)  |
+|---|---|---|---|---|
+|  C5.18X Large | 0  | 128  | 1345 sec, N/A  | 875, N/A  |
+|  P3.8X Large |  1 |  128 | 868 sec, 772 MB | 817, 15360 MB  |
+|  P3.8X Large | 4  | 128  | 775 sec, 764 MB | 1468, 15410 MB  |
+|  P3.16X Large | 8  | 128  | TBD | TBD |
+
+### Synthetic Data
+
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)   | Keras-TensorFlow (Time/Epoch), (GPU Mem)   |
+|---|---|---|---|---|
+|  C5.18X Large | 0  | 128  | 24 sec, N/A | 14 sec, N/A|
+|  P3.8X Large |  1 |  128 | 13 sec, 792 MB | 12 sec, 15360 MB|
+|  P3.8X Large | 4  | 128  | 12 sec, 770 MB | 21 sec, 15410 MB |
+|  P3.16X Large | 8  | 128  | TBD | TBD |
+
+
 # Detailed RNN Benchmark Results
 
 Below is the result of GPU memory usage while running LSTM model on Synthetic, Nietzsche, and WikiText-2 character level dataset.

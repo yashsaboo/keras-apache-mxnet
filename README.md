@@ -16,7 +16,6 @@ Keras-MXNet is the fork of [Keras project](https://github.com/keras-team/keras) 
 
 Detailed documentation for the MXNet backend are provided in the [docs/mxnet_backend folder](docs/mxnet_backend/README.md).
 
-Keras is a high-level neural networks API, written in Python and capable of running on top of [TensorFlow](https://github.com/tensorflow/tensorflow), [CNTK](https://github.com/Microsoft/cntk), [Apache MXNet](https://github.com/apache/incubator-mxnet/), or [Theano](https://github.com/Theano/Theano). It was developed with a focus on enabling fast experimentation. *Being able to go from idea to result with the least possible delay is key to doing good research.*
 
 Use Keras if you need a deep learning library that:
 
@@ -128,7 +127,6 @@ the MXNet backend.
 - [TensorFlow installation instructions](https://www.tensorflow.org/install/).
 - [Theano installation instructions](http://deeplearning.net/software/theano/install.html#install).
 - [CNTK installation instructions](https://docs.microsoft.com/en-us/cognitive-toolkit/setup-cntk-on-your-machine).
-- [MXNet installation instructions](http://mxnet.incubator.apache.org/install/index.html).
 
 You may also consider installing the following **optional dependencies**:
 
