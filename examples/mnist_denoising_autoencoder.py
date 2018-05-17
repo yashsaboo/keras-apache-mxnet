@@ -36,8 +36,14 @@ np.random.seed(1337)
 (x_train, _), (x_test, _) = mnist.load_data()
 
 image_size = x_train.shape[1]
-x_train = np.reshape(x_train, [-1, image_size, image_size, 1])
-x_test = np.reshape(x_test, [-1, image_size, image_size, 1])
+if K.image_data_format() == 'channels_first':
+    x_train = np.reshape(x_train, [-1, 1, image_size, image_size])
+    x_test = np.reshape(x_test, [-1, 1, image_size, image_size])
+    input_shape = (1, image_size, image_size)
+else:
+    x_train = np.reshape(x_train, [-1, image_size, image_size, 1])
+    x_test = np.reshape(x_test, [-1, image_size, image_size, 1])
+    input_shape = (image_size, image_size, 1)
 x_train = x_train.astype('float32') / 255
 x_test = x_test.astype('float32') / 255
 
@@ -52,7 +58,6 @@ x_train_noisy = np.clip(x_train_noisy, 0., 1.)
 x_test_noisy = np.clip(x_test_noisy, 0., 1.)
 
 # Network parameters
-input_shape = (image_size, image_size, 1)
 batch_size = 128
 kernel_size = 3
 latent_dim = 16

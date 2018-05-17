@@ -55,6 +55,9 @@ from keras.models import Model
 from keras.preprocessing.image import load_img, img_to_array
 from keras.applications import vgg19
 
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Symbolic Gradients is not supported yet.")
+
 # Command line arguments
 parser = argparse.ArgumentParser(description='Keras neural doodle example')
 parser.add_argument('--nlabels', type=int,

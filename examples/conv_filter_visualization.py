@@ -41,7 +41,7 @@ def deprocess_image(x):
     return x
 
 # build the VGG16 network with ImageNet weights
-model = vgg16.VGG16(weights='imagenet', include_top=False)
+model = vgg16.VGG16(weights='imagenet', include_top=False, input_shape=(img_width, img_height, 3))
 print('Model loaded.')
 
 model.summary()

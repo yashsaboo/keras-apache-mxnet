@@ -2593,13 +2593,13 @@ def rnn(step_function, inputs, initial_states,
             'Ex: new_x_train = keras.preprocessing.sequence.pad_sequences(old_x_train, '
             'maxlen=MAX_LEN_OF_INPUT_SAMPLE_TYPE_INT). '
             'More Details - '
-            'https://github.com/awslabs/keras-apache-mxnet/wiki/Using-RNN-with-MXNet-backend')
+            'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md')  #nopep8
 
     if not unroll and dshape[1] is not None:
         warnings.warn('MXNet Backend: `unroll=False` is not supported yet in RNN. Since the input_shape is known, '
                       'setting `unroll=True` and continuing the execution.'
-                      'More Details - https://github.com/awslabs/keras-apache-mxnet/wiki/Using-RNN-with-MXNet-backend',
-                      stacklevel=2)
+                      'More Details - '
+                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',  stacklevel=2)  #nopep8
 
     # Split the inputs across time dimension and generate the list of inputs
     # with shape `(samples, ...)` (no time dimension)
@@ -2761,7 +2761,7 @@ def in_test_phase(x, alt, training=None):
     # Returns
         Either `x` or `alt` based on `K.learning_phase`.
     """
-    raise in_train_phase(alt, x, training=training)
+    return in_train_phase(alt, x, training=training)
 
 
 # NN OPERATIONS
@@ -3501,6 +3501,28 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     return KerasSymbol(sym)
 
 
+# CTC(Connectionist Temporal Classification)
+
+def ctc_batch_cost(y_true, y_pred, input_length, label_length):
+    """Runs CTC loss algorithm on each batch element.
+
+    # Arguments
+        y_true: tensor `(samples, max_string_length)`
+            containing the truth labels.
+        y_pred: tensor `(samples, time_steps, num_categories)`
+            containing the prediction, or output of the softmax.
+        input_length: tensor `(samples, 1)` containing the sequence length for
+            each batch item in `y_pred`.
+        label_length: tensor `(samples, 1)` containing the sequence length for
+            each batch item in `y_true`.
+
+    # Returns
+        Tensor with shape (samples,1) containing the
+            CTC loss of each element.
+    """
+    raise NotImplementedError("MXNet Backend: CTC is not supported yet.")
+
+
 # HIGH ORDER FUNCTIONS
 
 def map_fn(fn, elems, name=None, dtype=None):
@@ -4183,7 +4205,9 @@ def _convnd(x, kernel, strides, filter_dilation, name=None, padding_mode='valid'
             'to transform `channels_last` data to `channels_first` format and '
             'also please change the `image_data_format` in `keras.json` to '
             '`channels_first`.'
-            'Note: `x_input` is a Numpy tensor or a list of Numpy tensor',
+            'Note: `x_input` is a Numpy tensor or a list of Numpy tensor'
+            'Refer to: '
+            'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/performance_guide.md',
             stacklevel=2)
 
     # Handle Data Format
@@ -4376,7 +4400,7 @@ def get_model():
             self._module = None
 
             # Create Module for Inference
-            self._compiled = False
+            self.compiled = False
             self._create_predict_module()
 
         def compile(self, optimizer, loss, metrics=None, loss_weights=None,
@@ -4457,7 +4481,7 @@ def get_model():
                 context=self._context,
                 fixed_param_names=self._fixed_weights)
             set_model(self)
-            self._compiled = True
+            self.compiled = True
 
         def _adjust_module(self, inputs, phase):
             if not self._module:
@@ -4483,7 +4507,7 @@ def get_model():
 
             if not self._module.binded:
                 # allow prediction without compiling the model using different binding
-                if not self._compiled and phase == 'pred':
+                if not self.compiled and phase == 'pred':
                     self._module.bind(data_shapes=data_shapes, label_shapes=None,
                                       for_training=False)
                     self._set_weights()
@@ -4568,7 +4592,7 @@ def get_model():
         def _make_predict_function(self):
             def predict_function(inputs):
                 # used predict only module if predict is called without compile
-                if not self._compiled:
+                if not self.compiled:
                     self._module = self._predict_only_module
                     set_model(self)
 

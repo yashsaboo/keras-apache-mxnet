@@ -120,6 +120,8 @@ xent_loss = img_rows * img_cols * metrics.binary_crossentropy(
     K.flatten(x_decoded_mean_squash))
 kl_loss = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
 vae_loss = K.mean(xent_loss + kl_loss)
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Custom loss is not supported yet.")
 vae.add_loss(vae_loss)
 
 vae.compile(optimizer='rmsprop')

@@ -32,8 +32,101 @@ except ImportError:
     h5py = None
 
 
+def save_mxnet_model(model, prefix, epoch=0):
+    """Save the model as MXNet model. Creates MXNet symbol and params file.
+
+    The saved model can be used to load in MXNet engine for inference. Can be used to perform
+    inference on any language bindings supported by MXNet.
+
+    Note: data_names and data_shapes required in MXNet represent input layer name and shape.
+    When you call save_mxnet_model, these information will be printed.
+    You can change the first dimension of data_shapes to match batch size for inference.
+
+    Below sample code shows how to load a Keras-MXNet pre-trained model saved with 'prefix',
+    input name as '/dense_1_input1' and inference batch size of 1 and data shape of 784.
+
+    ```python
+    >>> import mxnet as mx
+    >>> sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch=0)
+    ##  data_names and data_shapes will be print
+    >>> mod = mx.mod.Module(symbol=sym, data_names=['/dense_1_input1'], \
+                            context=mx.cpu(), label_names=None)
+    >>> mod.bind(for_training=False, data_shapes=[('/dense_1_input1', (1,784))], \
+                 label_shapes=mod._label_shapes)
+    >>> mod.set_params(arg_params, aux_params, allow_missing=True)
+    ##  Prepare data iterator
+    >>> data_iter = mx.io.NDArrayIter(data, label=None, batch_size=1)
+    ##  Predict
+    >>> result = mod.predict(data_iter)
+    ```
+
+    # Arguments
+        model: Keras model instance to be saved as MXNet model.
+        prefix: Prefix name of the saved Model (symbol and params) files.
+                Model will be saved as '<prefix>-symbol.json' and '<prefix>-<epoch>.params'.
+        epoch: (Optional) Tag the params file with epoch of the model being saved. Default is 0.
+               Model params file is saved as '<prefix>-<epoch>.params' or '<prefix>-0000.params' by default.
+
+    # Returns
+        data_names, data_shapes
+
+    # Raises
+        ValueError: Unsupported model type
+    """
+    assert model is not None, 'MXNet Backend: Invalid state. Model cannot be None.'
+
+    # Handle Sequential Model / Functional API Model Case
+    if isinstance(model, Sequential):
+        mxnet_model = model.model
+    elif isinstance(model, Model):
+        mxnet_model = model
+    else:
+        raise ValueError('MXNet Backend: Invalid model type. Supported Models - Sequential, Model.')
+
+    assert mxnet_model is not None, 'MXNet Backend: Invalid state. MXNet Model cannot be None.'
+
+    if not mxnet_model.compiled:
+        raise ValueError('MXNet Backend: Model is not compiled. Cannot save the MXNet model!')
+
+    # Saving MXNet model for Inference in native MXNet engine.
+    symbol = mxnet_model._pred_mxnet_symbol
+    module = mxnet_model._module
+
+    assert symbol is not None, 'MXNet Backend: Invalid state. MXNet Symbol cannot be None.'
+    assert module is not None, 'MXNet Backend: Invalid state. MXNet Module cannot be None.'
+
+    # Get Module Input data_names and data_shapes.
+    # This info will be useful for users to easily bind the exported model in MXNet.
+    pred_module = module._buckets['pred']
+    data_names = pred_module.data_names
+    data_shapes = pred_module.data_shapes
+
+    symbol_fname = '%s-symbol.json' % prefix
+    params_fname = '%s-%04d.params' % (prefix, epoch)
+    symbol.save(symbol_fname)
+    module.save_params(params_fname)
+
+    print('MXNet Backend: Successfully exported the model as MXNet model!')
+    print('MXNet symbol file - ', symbol_fname)
+    print('MXNet params file - ', params_fname)
+    print('\n\nModel input data_names and data_shapes are: ')
+    print('data_names : ', data_names)
+    print('data_shapes : ', data_shapes)
+    print('\n\nNote: In the above data_shapes, the first dimension represent '
+          'the batch_size used for model training. ')
+    print('You can change the batch_size for binding the module based on your inference batch_size.')
+
+    return data_names, data_shapes
+
+
 def save_model(model, filepath, overwrite=True, include_optimizer=True):
     """Save a model to a HDF5 file.
+
+    Note: Please also see
+    [How can I install HDF5 or h5py to save my models in Keras?](
+        /getting-started/faq/
+        #how-can-i-install-HDF5-or-h5py-to-save-my-models-in-Keras)
+    in the FAQ for instructions on how to install `h5py`.
 
     The saved model contains:
         - the model's configuration (topology)
@@ -769,6 +862,15 @@ class Sequential(Model):
                 topology.load_weights_from_hdf5_group(f, layers, reshape=reshape)
 
     def save_weights(self, filepath, overwrite=True):
+        """Saves the weights of a model.
+
+        Note: Please also see
+        [How can I install HDF5 or h5py to save my models in Keras?](
+        /getting-started/faq/
+        #how-can-i-install-HDF5-or-h5py-to-save-my-models-in-Keras)
+        in the FAQ for instructions on how to install `h5py`.
+        """
+
         if h5py is None:
             raise ImportError('`save_weights` requires h5py.')
         # If file exists and should not be overwritten:

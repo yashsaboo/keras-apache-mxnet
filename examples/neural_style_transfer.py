@@ -60,6 +60,9 @@ import argparse
 from keras.applications import vgg19
 from keras import backend as K
 
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Symbolic Gradients is not supported yet.")
+
 parser = argparse.ArgumentParser(description='Neural style transfer with Keras.')
 parser.add_argument('base_image_path', metavar='base', type=str,
                     help='Path to the image to transform.')

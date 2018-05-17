@@ -53,7 +53,8 @@ vae = Model(x, x_decoded_mean)
 xent_loss = original_dim * metrics.binary_crossentropy(x, x_decoded_mean)
 kl_loss = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
 vae_loss = K.mean(xent_loss + kl_loss)
-
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Custom loss is not supported yet.")
 vae.add_loss(vae_loss)
 vae.compile(optimizer='rmsprop')
 vae.summary()

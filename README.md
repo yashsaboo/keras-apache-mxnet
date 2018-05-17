@@ -8,9 +8,14 @@
 
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg?maxAge=2592000)](https://github.com/keras-team/keras/blob/master/LICENSE)
 
-## You have just found Keras.
+## You have just found Keras-MXNet
 
-Keras is a high-level neural networks API, written in Python and capable of running on top of [TensorFlow](https://github.com/tensorflow/tensorflow), [CNTK](https://github.com/Microsoft/cntk), [Apache MXNet](https://github.com/apache/incubator-mxnet/), or [Theano](https://github.com/Theano/Theano). It was developed with a focus on enabling fast experimentation. *Being able to go from idea to result with the least possible delay is key to doing good research.*
+Keras is a high-level neural networks API, written in Python and capable of running on top of [Apache MXNet (incubating)](https://github.com/apache/incubator-mxnet/), [TensorFlow](https://github.com/tensorflow/tensorflow), [CNTK](https://github.com/Microsoft/cntk), or [Theano](https://github.com/Theano/Theano). It was developed with a focus on enabling fast experimentation. *Being able to go from idea to result with the least possible delay is key to doing good research.*
+
+Keras-MXNet is the fork of [Keras project](https://github.com/keras-team/keras) and adds support for the high-performance, scalable deep learning library MXNet as a backend.
+
+Detailed documentation for the MXNet backend are provided in the [docs/mxnet_backend folder](docs/mxnet_backend/README.md).
+
 
 Use Keras if you need a deep learning library that:
 
@@ -107,7 +112,7 @@ For a more in-depth tutorial about Keras, you can check out:
 - [Getting started with the Sequential model](https://keras.io/getting-started/sequential-model-guide)
 - [Getting started with the functional API](https://keras.io/getting-started/functional-api-guide)
 
-In the [examples folder](https://github.com/keras-team/keras/tree/master/examples) of the repository, you will find more advanced models: question-answering with memory networks, text generation with stacked LSTMs, etc.
+In the [examples folder](https://github.com/awslabs/keras-apache-mxnet/tree/master/examples) of the repository, you will find more advanced models: question-answering with memory networks, text generation with stacked LSTMs, etc.
 
 
 ------------------
@@ -115,12 +120,13 @@ In the [examples folder](https://github.com/keras-team/keras/tree/master/example
 
 ## Installation
 
-Before installing Keras, please install one of its backend engines: TensorFlow, Theano, or CNTK. We recommend the TensorFlow backend.
+Before installing Keras, please install one of its backend engines: MXNet, TensorFlow, Theano, or CNTK. We recommend 
+the MXNet backend.
 
+- [MXNet installation instructions](http://mxnet.incubator.apache.org/install/index.html).
 - [TensorFlow installation instructions](https://www.tensorflow.org/install/).
 - [Theano installation instructions](http://deeplearning.net/software/theano/install.html#install).
 - [CNTK installation instructions](https://docs.microsoft.com/en-us/cognitive-toolkit/setup-cntk-on-your-machine).
-- [MXNet installation instructions](http://mxnet.incubator.apache.org/install/index.html).
 
 You may also consider installing the following **optional dependencies**:
 
@@ -133,13 +139,13 @@ Then, you can install Keras itself. There are two ways to install Keras:
 - **Install Keras from PyPI (recommended):**
 
 ```sh
-sudo pip install keras
+sudo pip install keras-mxnet
 ```
 
 If you are using a virtualenv, you may want to avoid using sudo:
 
 ```sh
-pip install keras
+pip install keras-mxnet
 ```
 
 - **Alternatively: install Keras from the GitHub source:**
@@ -147,10 +153,10 @@ pip install keras
 First, clone Keras using `git`:
 
 ```sh
-git clone https://github.com/keras-team/keras.git
+git clone https://github.com/awslabs/keras-apache-mxnet.git
 ```
 
- Then, `cd` to the Keras folder and run the install command:
+ Then, `cd` to the keras-apache-mxnet folder and run the install command:
 ```sh
 cd keras
 sudo python setup.py install
@@ -159,16 +165,18 @@ sudo python setup.py install
 ------------------
 
 
-## Switching from TensorFlow to CNTK, MXNet or Theano
+## Switching from MXNet to TensorFlow, CNTK or Theano
 
-By default, Keras will use TensorFlow as its tensor manipulation library. [Follow these instructions](https://keras.io/backend/) to configure the Keras backend.
+By default, Keras-MXNet will use MXNet as its tensor manipulation library. [Follow these instructions](https://keras.io/backend/) to configure the Keras backend.
 
 ------------------
 
 
 ## Support
 
-You can ask questions and join the development discussion:
+You can ask Keras-MXNet specific questions or post **bug reports and feature requests** in [GitHub issues](https://github.com/awslabs/keras-apache-mxnet/issues).
+
+You can ask Keras questions and join the development discussion:
 
 - On the [Keras Google group](https://groups.google.com/forum/#!forum/keras-users).
 - On the [Keras Slack channel](https://kerasteam.slack.com). Use [this link](https://keras-slack-autojoin.herokuapp.com/) to request an invitation to the channel.
