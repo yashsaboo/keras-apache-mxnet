@@ -36,6 +36,7 @@ from keras.models import model_from_yaml
 yaml_string = model.to_yaml()
 model = model_from_yaml(yaml_string)
 ```
+<<<<<<< HEAD
 
 - `model.save_weights(filepath)` saves the weights of the model as a HDF5 file.
 - `model.load_weights(filepath, by_name=False)` loads the weights of the model from a HDF5 file (created by `save_weights`). By default, the architecture is expected to be unchanged. To load weights into a different architecture (with some layers in common), use `by_name=True` to load only those layers with the same name.
@@ -93,3 +94,9 @@ That means the model's topology cannot be inspected or serialized. As a result, 
 **Key point:** use the right API for the job. The `Model` subclassing API can provide you with greater flexbility for implementing complex models,
 but it comes at a cost (in addition to these missing features):
 it is more verbose, more complex, and has more opportunities for user errors. If possible, prefer using the functional API, which is more user-friendly.
+=======
+- `model.save_weights(filepath)`: saves the weights of the model as a HDF5 file.
+- `model.load_weights(filepath, by_name=False)`: loads the weights of the model from a HDF5 file (created by `save_weights`). By default, the architecture is expected to be unchanged. To load weights into a different architecture (with some layers in common), use `by_name=True` to load only those layers with the same name.
+
+Note: Please also see [How can I install HDF5 or h5py to save my models in Keras?](/getting-started/faq/#how-can-i-install-HDF5-or-h5py-to-save-my-models-in-Keras) in the FAQ for instructions on how to install `h5py`.
+>>>>>>> Rebase to latest Keras April 20 2018 (#71)

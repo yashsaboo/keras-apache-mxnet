@@ -32,4 +32,8 @@ echo -e "Running tests with the following config:\n$(cat ~/.keras/keras.json)"
 
 dir=`pwd`
 
+<<<<<<< HEAD
 python $dir/run_benchmark.py  --pwd=$dir --mode="$1" --model_name="$2" --dry_run=True --inference="$3" --epochs="$4"
+=======
+python $dir/run_benchmark.py  --pwd=$dir --mode="$1" --model_name="$2" --dry_run=True --inference="$3" --epochs="$4"
+>>>>>>> Rebase to latest Keras April 20 2018 (#71)

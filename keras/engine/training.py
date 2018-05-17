@@ -426,6 +426,7 @@ class Model(Network):
                     self.stateful_metric_names.append(metric_name)
                     self.stateful_metric_functions.append(metric_fn)
                     self.metrics_updates += metric_fn.updates
+
         with K.name_scope('metrics'):
             for i in range(len(self.outputs)):
                 if i in skip_target_indices:
@@ -436,6 +437,7 @@ class Model(Network):
                 weights = sample_weights[i]
                 output_metrics = nested_metrics[i]
                 output_weighted_metrics = nested_weighted_metrics[i]
+
                 handle_metrics(output_metrics)
                 handle_metrics(output_weighted_metrics, weights=weights)
 
@@ -1424,6 +1426,7 @@ class Model(Network):
             use_multiprocessing=use_multiprocessing,
             shuffle=shuffle,
             initial_epoch=initial_epoch)
+
 
     @interfaces.legacy_generator_methods_support
     def evaluate_generator(self, generator,
