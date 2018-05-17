@@ -90,7 +90,7 @@ class LstmBenchmark:
         # use multi gpu model for more than 1 gpu
         if (keras.backend.backend() == 'tensorflow' or
                 keras.backend.backend() == 'mxnet') and gpus > 1:
-            model = multi_gpu_model(model, gpus=gpus)
+            model = multi_gpu_model(model, gpus=gpus, cpu_merge=False)
 
         if use_dataset_tensors:
             model.compile(loss=crossentropy_from_logits,

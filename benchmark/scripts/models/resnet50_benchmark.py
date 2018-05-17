@@ -77,7 +77,7 @@ class Resnet50Benchmark:
         model = keras.models.Model(inputs, predictions)
         # use multi gpu model for more than 1 gpu
         if (keras.backend.backend() == "tensorflow" or keras.backend.backend() == "mxnet") and gpus > 1:
-            model = keras.utils.multi_gpu_model(model, gpus=gpus)
+            model = keras.utils.multi_gpu_model(model, gpus=gpus, cpu_merge=False)
 
         if inference:
             times = []
