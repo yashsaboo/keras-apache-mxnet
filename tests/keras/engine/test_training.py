@@ -517,12 +517,8 @@ def test_model_methods():
         assert np.shape(out) == shape_0
 
 
-<<<<<<< HEAD
 @pytest.mark.skipif(sys.version_info < (3,),
                     reason='Cannot catch warnings in python 2')
-=======
-@pytest.mark.skipif(sys.version_info < (3,), reason='Cannot catch warnings in python 2')
->>>>>>> Add MXNet Backend (#59)
 @keras_test
 def test_warnings():
     a = Input(shape=(3,), name='input_a')

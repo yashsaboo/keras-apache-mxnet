@@ -832,13 +832,13 @@ def test_sequential_mxnet_model_saving():
     y = np.random.random((1, 3, 3))
     model.train_on_batch(x, y)
 
-    save_mxnet_model(model, prefix='test', epoch=0)
+    data_names, _ = save_mxnet_model(model, prefix='test', epoch=0)
 
     # Import with MXNet and try to perform inference
     import mxnet as mx
     sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test', epoch=0)
-    mod = mx.mod.Module(symbol=sym, data_names=['/dense_1_input1'], context=mx.cpu(), label_names=None)
-    mod.bind(for_training=False, data_shapes=[('/dense_1_input1', (1, 3))], label_shapes=mod._label_shapes)
+    mod = mx.mod.Module(symbol=sym, data_names=data_names, context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[(data_names[0], (1, 3))], label_shapes=mod._label_shapes)
     mod.set_params(arg_params, aux_params, allow_missing=True)
     data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 3))], label=None, batch_size=1)
     mod.predict(data_iter)

@@ -108,7 +108,7 @@ def to_channels_first(data):
             else:
                 raise ValueError('Your input dimension tensor is incorrect.')
         else:
-            raise warnings.warn(
+            warnings.warn(
                 '`to_channels_first()` method transform the data from'
                 '`channels_last` format to `channels_first` format. Please '
                 'check the `image_data_format` and `backend` in `keras.json` '
