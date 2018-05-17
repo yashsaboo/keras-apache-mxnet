@@ -94,7 +94,7 @@ def getwhere(x):
     y_prepool, y_postpool = x
     return K.gradients(K.sum(y_postpool), y_prepool)
 
-if K.backend() == 'tensorflow':
+if K.backend() != 'theano':
     raise RuntimeError('This example can only run with the '
                        'Theano backend for the time being, '
                        'because it requires taking the gradient '

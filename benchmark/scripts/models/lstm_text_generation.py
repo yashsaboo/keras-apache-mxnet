@@ -9,6 +9,7 @@ from __future__ import print_function
 import random
 import sys
 import keras
+import logging
 import numpy as np
 
 from keras.utils import multi_gpu_model
@@ -17,7 +18,10 @@ from keras.models import Sequential
 from keras.layers import Dense, Activation
 from keras.layers import LSTM
 from keras.optimizers import RMSprop
-from models import timehistory, dataset_utils
+from . import dataset_utils
+from .timehistory import TimeHistory
+from logging_metrics import LoggingMetrics
+
 
 if keras.backend.backend() != 'mxnet' and \
         keras.backend.backend() != 'tensorflow':
@@ -42,7 +46,15 @@ class LstmBenchmark:
         self.epochs = 60
         self.dataset_name = dataset_name
 
-    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False):
+    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False, epochs=20):
+        # prepare logging
+        # file name: backend_data_format_dataset_model_batch_size_gpus.log
+        log_file = keras.backend.backend() + '_' + keras.backend.image_data_format() + \
+                   '_lstm_test_generation_' + self.dataset_name + '_batch_size_' + \
+                   str(self.batch_size) + '_' + str(gpus) + 'gpus.log'
+        logging.basicConfig(level=logging.INFO, filename=log_file)
+
+        self.epochs = epochs
         print("Running model ", self.test_name)
         keras.backend.set_learning_phase(True)
 
@@ -102,7 +114,7 @@ class LstmBenchmark:
         # use multi gpu model for more than 1 gpu
         if (keras.backend.backend() == 'tensorflow' or
                 keras.backend.backend() == 'mxnet') and gpus > 1:
-            model = multi_gpu_model(model, gpus=gpus)
+            model = multi_gpu_model(model, gpus=gpus, cpu_merge=False)
 
         if use_dataset_tensors:
             model.compile(loss=crossentropy_from_logits,
@@ -113,7 +125,7 @@ class LstmBenchmark:
             model.compile(loss='categorical_crossentropy',
                           optimizer=optimizer)
 
-        time_callback = timehistory.TimeHistory()
+        time_callback = TimeHistory()
 
         def sample(preds, temperature=1.0):
             # helper function to sample an index from a probability array
@@ -158,18 +170,21 @@ class LstmBenchmark:
         print_callback = LambdaCallback(on_epoch_end=on_epoch_end)
 
         if inference:
-            callback = print_callback
+            callback = [time_callback, print_callback]
         else:
-            callback = time_callback
+            callback = [time_callback]
 
         if use_dataset_tensors:
-            model.fit(epochs=self.epochs, steps_per_epoch=15,
-                      callbacks=[callback])
+            history_callback = model.fit(epochs=self.epochs, steps_per_epoch=15,
+                                         callbacks=callback)
         else:
-            model.fit(x_train, y_train,
-                      batch_size=self.batch_size,
-                      epochs=self.epochs,
-                      callbacks=[callback])
+            history_callback = model.fit(x_train, y_train,
+                                         batch_size=self.batch_size,
+                                         epochs=self.epochs,
+                                         callbacks=callback)
+
+        log = LoggingMetrics(history_callback, time_callback)
+        log.save_metrics_to_log(logging)
 
         if keras.backend.backend() == "tensorflow":
             keras.backend.clear_session()

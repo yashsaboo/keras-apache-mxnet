@@ -9,6 +9,10 @@ from keras.layers.convolutional_recurrent import ConvLSTM2D
 from keras.layers.normalization import BatchNormalization
 import numpy as np
 import pylab as plt
+from keras import backend as K
+
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: ConvLSTM2D Layer is not supported yet.")
 
 # We create a layer which take as input movies of shape
 # (n_frames, width, height, channels) and returns a movie

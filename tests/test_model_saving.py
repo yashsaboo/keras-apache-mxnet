@@ -17,7 +17,7 @@ from keras import optimizers
 from keras import losses
 from keras import metrics
 from keras.utils.test_utils import keras_test
-from keras.models import save_model, load_model
+from keras.models import save_model, load_model, save_mxnet_model
 
 
 skipif_no_tf_gpu = pytest.mark.skipif(

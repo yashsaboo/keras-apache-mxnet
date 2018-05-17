@@ -204,6 +204,11 @@ def multi_gpu_model(model, gpus=None, cpu_merge=True, cpu_relocation=False):
         with tf.device('/cpu:0'):
             model = clone_model(model)
 
+    # Relocate the model definition under CPU device scope if needed
+    if cpu_relocation:
+        with tf.device('/cpu:0'):
+            model = clone_model(model)
+
     all_outputs = []
     for i in range(len(model.outputs)):
         all_outputs.append([])

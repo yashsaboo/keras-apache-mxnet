@@ -1122,7 +1122,6 @@ class TestBackend(object):
                                        BACKENDS_WITHOUT_MXNET, cntk_dynamicity=True,
                                        data_format=data_format)
 
-<<<<<<< HEAD
     @pytest.mark.parametrize('op,input_shape,kernel_shape,depth_multiplier,padding,data_format', [
         ('separable_conv1d', (2, 8, 2), (3,), 1, 'same', 'channels_last'),
         ('separable_conv1d', (1, 8, 2), (3,), 2, 'valid', 'channels_last'),
@@ -1148,50 +1147,6 @@ class TestBackend(object):
                 K.variable(depthwise), K.variable(pointwise),
                 padding=padding, data_format=data_format))
         assert_allclose(y1, y2, atol=1e-05)
-=======
-        # test in data_format = channels_first
-        for input_shape in [(2, 3, 4, 5, 4), (2, 3, 5, 4, 6)]:
-            for kernel_shape in [(2, 2, 2, 3, 4), (3, 2, 4, 3, 4)]:
-                check_two_tensor_operation('conv3d', input_shape, kernel_shape,
-                                           BACKENDS_WITHOUT_MXNET, cntk_dynamicity=True,
-                                           data_format='channels_first')
-
-        # test in data_format = channels_last
-        input_shape = (1, 2, 2, 2, 1)
-        kernel_shape = (2, 2, 2, 1, 1)
-        check_two_tensor_operation('conv3d', input_shape, kernel_shape,
-                                   BACKENDS, cntk_dynamicity=True,
-                                   data_format='channels_last')
-
-        xval = np.random.random(input_shape)
-        kernel_val = np.random.random(kernel_shape) - 0.5
-        # Test invalid use cases
-        for k in BACKENDS:
-            with pytest.raises(ValueError):
-                k.conv3d(k.variable(xval), k.variable(kernel_val), data_format='channels_middle')
-
-    @pytest.mark.parametrize('k', [KTF], ids=['TensorFlow'])
-    def test_depthwise_conv_2d(self, k):
-        for data_format in ['channels_first', 'channels_last']:
-            x_shape = (4, 4)
-            if data_format == 'channels_first':
-                input_shape = (2, 3) + x_shape
-            elif data_format == 'channels_last':
-                input_shape = (2,) + x_shape + (3,)
-            kernel_shape = (3, 3, 3, 2)
-
-            x_val = np.ones(input_shape)
-            kernel_val = np.arange(np.prod(kernel_shape)).reshape(kernel_shape)
-            z = k.eval(k.depthwise_conv2d(k.variable(x_val), k.variable(kernel_val),
-                                          data_format=data_format))
-
-            for z_i in np.split(z, 6, axis=1 if data_format == 'channels_first' else -1):
-                assert_allclose(z_i, z_i[0] * np.ones_like(z_i))
-
-        # Test invalid use cases
-        with pytest.raises(ValueError):
-            k.depthwise_conv2d(k.variable(x_val), k.variable(kernel_val), data_format='channels_middle')
->>>>>>> Add MXNet Backend (#59)
 
     def legacy_test_pool2d(self):
         check_single_tensor_operation('pool2d', (5, 10, 12, 3),
@@ -1309,7 +1264,6 @@ class TestBackend(object):
         dummy_w_3d = K.variable(np.ones((2, 2, 2, 3, 4)))
         dummy_w1x1_2d = K.variable(np.ones((1, 1, 12, 7)))
 
-<<<<<<< HEAD
         with pytest.raises(ValueError):
             K.conv1d(dummy_x_1d, dummy_w_1d, data_format='channels_middle')
 
@@ -1323,19 +1277,6 @@ class TestBackend(object):
             with pytest.raises(ValueError):
                 K.separable_conv2d(dummy_x_2d, dummy_w_2d, dummy_w1x1_2d,
                                    data_format='channels_middle')
-=======
-            if k != KTH and k != KMX:
-                with pytest.raises(ValueError):
-                    k.separable_conv2d(k.variable(np.ones((2, 3, 4, 5))),
-                                       k.variable(np.ones((2, 2, 3, 4))),
-                                       k.variable(np.ones((1, 1, 12, 7))),
-                                       data_format='channels_middle')
-            if k != KMX:
-                with pytest.raises(ValueError):
-                    k.depthwise_conv2d(k.variable(np.ones((2, 3, 4, 5))),
-                                       k.variable(np.ones((2, 2, 3, 4))),
-                                       data_format='channels_middle')
->>>>>>> Add MXNet Backend (#59)
 
         with pytest.raises(ValueError):
             K.depthwise_conv2d(dummy_x_2d, dummy_w_2d,

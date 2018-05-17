@@ -5,14 +5,17 @@ https://github.com/tensorflow/benchmarks/blob/keras-benchmarks/scripts/keras_ben
 """
 
 from __future__ import print_function
+import logging
 import keras
+
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
 from keras.optimizers import RMSprop
 from keras.utils import multi_gpu_model
 
-from models import timehistory
+from .timehistory import TimeHistory
+from logging_metrics import LoggingMetrics
 from data_generator import generate_text_input_data
 
 if keras.backend.backend() != 'mxnet' and \
@@ -38,7 +41,15 @@ class LstmBenchmark:
         self.epochs = 4
         self.num_samples = 50000
 
-    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False):
+    def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False, epochs=20):
+        # prepare logging
+        # file name: backend_data_format_dataset_model_batch_size_gpus.log
+        log_file = keras.backend.backend() + '_' + keras.backend.image_data_format() + \
+                   '_lstm_synthetic_batch_size_' + \
+                   str(self.batch_size) + '_' + str(gpus) + 'gpus.log'
+        logging.basicConfig(level=logging.INFO, filename=log_file)
+
+        self.epochs = epochs
         print("Running model ", self.test_name)
         keras.backend.set_learning_phase(True)
 
@@ -79,7 +90,7 @@ class LstmBenchmark:
         # use multi gpu model for more than 1 gpu
         if (keras.backend.backend() == 'tensorflow' or
                 keras.backend.backend() == 'mxnet') and gpus > 1:
-            model = multi_gpu_model(model, gpus=gpus)
+            model = multi_gpu_model(model, gpus=gpus, cpu_merge=False)
 
         if use_dataset_tensors:
             model.compile(loss=crossentropy_from_logits,
@@ -89,20 +100,19 @@ class LstmBenchmark:
         else:
             model.compile(loss='categorical_crossentropy', optimizer=optimizer)
 
-        time_callback = timehistory.TimeHistory()
+        time_callback = TimeHistory()
 
         if use_dataset_tensors:
-            model.fit(epochs=self.epochs, steps_per_epoch=15,
-                      callbacks=[time_callback])
+            history_callback = model.fit(epochs=self.epochs, steps_per_epoch=15,
+                                         callbacks=[time_callback])
         else:
-            model.fit(x_train, y_train,
-                      batch_size=self.batch_size,
-                      epochs=self.epochs,
-                      callbacks=[time_callback])
+            history_callback = model.fit(x_train, y_train,
+                                         batch_size=self.batch_size,
+                                         epochs=self.epochs,
+                                         callbacks=[time_callback])
 
-        self.total_time = 0
-        for i in range(1, self.epochs):
-            self.total_time += time_callback.times[i]
+        log = LoggingMetrics(history_callback, time_callback)
+        log.save_metrics_to_log(logging)
 
         if keras.backend.backend() == "tensorflow":
             keras.backend.clear_session()

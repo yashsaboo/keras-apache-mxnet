@@ -190,7 +190,7 @@ def test_shared_batchnorm():
 
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
-                    reason='MXNet backend uses native BatchNorm operator. Do do updates in the model.')
+                    reason='MXNet backend uses native BatchNorm operator which does updates in the model.')
 @keras_test
 def test_that_trainable_disables_updates():
     val_a = np.random.random((10, 4))
