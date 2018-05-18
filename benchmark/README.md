@@ -62,18 +62,18 @@ NOTE:
 
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
-|  P3.8X Large | 1  | 32  | 165  | 50  |
-|  P3.8X Large |  4 |  128 | 538  | 162  |
-|  P3.16X Large | 8  | 256  | 728  | 212  |
+|  P3.8X Large | 1  | 32  | 202  | 52  |
+|  P3.8X Large |  4 |  128 | 536  | 162  |
+|  P3.16X Large | 8  | 256  | 681  | 209  |
 
 #### ResNet50-Synthetic Data
 
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
-|  C5.18X Large | 0  | 32  | 9  | 4  |
-|  P3.8X Large |  1 |  32 | 229  | 164  |
-|  P3.8X Large |  4 |  128 | 728  | 409  |
-|  P3.16X Large | 8  | 256  | 963  | 164  |
+|  C5.18X Large | 0  | 32  | 13  | 4  |
+|  P3.8X Large |  1 |  32 | 194  | 184  |
+|  P3.8X Large |  4 |  128 | 764  | 393  |
+|  P3.16X Large | 8  | 256  | 1068  | 261  |
 
 
 #### ResNet50-CIFAR10
@@ -81,9 +81,9 @@ NOTE:
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
 |  C5.18X Large | 0  | 32  | 87  | 59  |
-|  P3.8X Large | 1  | 32  | TBD  | TBD  |
-|  P3.8X Large |  4 |  128 | 1792  | 1020  |
-|  P3.16X Large | 8  | 256  | 1618  | 962  |
+|  P3.8X Large | 1  | 32  | 831  | 498  |
+|  P3.8X Large |  4 |  128 | 1783  | 1020  |
+|  P3.16X Large | 8  | 256  | 1680  | 435  |
 
 
 You can see more benchmark experiments with different instance types, batch_size and other parameters in [detailed CNN 
