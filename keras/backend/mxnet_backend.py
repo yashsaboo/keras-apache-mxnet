@@ -2593,13 +2593,13 @@ def rnn(step_function, inputs, initial_states,
             'Ex: new_x_train = keras.preprocessing.sequence.pad_sequences(old_x_train, '
             'maxlen=MAX_LEN_OF_INPUT_SAMPLE_TYPE_INT). '
             'More Details - '
-            'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md')  #nopep8
+            'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md')  # nopep8
 
     if not unroll and dshape[1] is not None:
         warnings.warn('MXNet Backend: `unroll=False` is not supported yet in RNN. Since the input_shape is known, '
                       'setting `unroll=True` and continuing the execution.'
                       'More Details - '
-                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',  stacklevel=2)  #nopep8
+                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md', stacklevel=2)  # nopep8
 
     # Split the inputs across time dimension and generate the list of inputs
     # with shape `(samples, ...)` (no time dimension)

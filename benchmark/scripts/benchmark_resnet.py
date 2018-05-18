@@ -86,8 +86,7 @@ subtract_pixel_mean = True
 
 # prepare logging
 # file name: backend_data_format_dataset_model_batch_size_gpus.log
-log_file = K.backend() + '_' + K.image_data_format() + '_' + args.dataset + '_resnet_v' + args.version + \
-           '_' + args.layers + '_batch_size' + str(batch_size) + '_' + str(num_gpus) + 'gpus'
+log_file = K.backend() + '_' + K.image_data_format() + '_' + args.dataset + '_resnet_v' + args.version + '_' + args.layers + '_batch_size' + str(batch_size) + '_' + str(num_gpus) + 'gpus'  # nopep8
 logFormatter = logging.Formatter('%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s')
 rootLogger = logging.getLogger()
 
@@ -300,9 +299,9 @@ if args.dataset == 'imagenet':
                 batch_time = 1000 * (end_time - start_time)
                 speed = batch_size * 1000.0 / batch_time if batch_time != 0 else 0
                 rootLogger.info('batch {}/{} loss: {} accuracy: {} '
-                             'time: {}ms speed: {}'.format(int(current_index / batch_size),
-                                                           int(nice_n / batch_size), loss, accuracy,
-                                                           batch_time, speed))
+                                'time: {}ms speed: {}'.format(int(current_index / batch_size),
+                                                              int(nice_n / batch_size), loss, accuracy,
+                                                              batch_time, speed))
 
             rootLogger.info('finish epoch {}/{}  total epoch time: {}ms'.format(i, epochs, total_time))
 
@@ -323,4 +322,4 @@ logg.save_metrics_to_log(rootLogger)
 # Score trained model.
 scores = model.evaluate(x_test, y_test, verbose=1)
 rootLogger.info('Test loss: %.4f' % scores[0])
-rootLogger.info('Test accuracy: %.4f'% scores[1])
+rootLogger.info('Test accuracy: %.4f' % scores[1])

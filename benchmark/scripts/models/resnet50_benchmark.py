@@ -17,8 +17,6 @@ import keras
 from keras import backend as K
 
 
-
-
 def crossentropy_from_logits(y_true, y_pred):
     return keras.backend.categorical_crossentropy(target=y_true,
                                                   output=y_pred,
@@ -39,12 +37,11 @@ class Resnet50Benchmark:
     def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False, epochs=20):
         self.epochs = epochs
         if gpus > 1:
-            self.batch_size = self.batch_size*gpus
+            self.batch_size = self.batch_size * gpus
 
         # prepare logging
         # file name: backend_data_format_dataset_model_batch_size_gpus.log
-        log_file = K.backend() + '_' + K.image_data_format() + '_synthetic_resnet50_batch_size_' + \
-                   str(self.batch_size) + '_' + str(gpus) + 'gpus.log'
+        log_file = K.backend() + '_' + K.image_data_format() + '_synthetic_resnet50_batch_size_' + str(self.batch_size) + '_' + str(gpus) + 'gpus.log'  # nopep8
         logging.basicConfig(level=logging.INFO, filename=log_file)
 
         print("Running model ", self.test_name)

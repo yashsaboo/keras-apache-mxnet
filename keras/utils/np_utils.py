@@ -84,34 +84,27 @@ def to_channels_first(data):
         if data_format not in {'channels_first', 'channels_last'}:
             raise ValueError('Unknown data_format ' + str(data_format))
 
-        if data_format == 'channels_first':
-            shape = np_data.shape
-            if len(shape) == 5:
-                np_data = np.transpose(np_data, (0, 4, 1, 2, 3))
-            elif len(shape) == 4:
-                np_data = np.transpose(np_data, (0, 3, 1, 2))
-            elif len(shape) == 3:
-                raise ValueError(
-                    'Your data is either a textual data of shape '
-                    '`(num_sample, step, feature)` or a grey scale image of '
-                    'shape `(num_sample, rows, cols)`. '
-                    'Case 1: If your data is time-series or a textual data'
-                    '(probably you are using Conv1D), then there is no need of '
-                    'channel conversion.'
-                    'Case 2: If your data is image(probably you are using '
-                    'Conv2D), then you need to reshape the tension dimensions '
-                    'as follows:'
-                    '`shape = x_input.shape`'
-                    '`x_input = x_input.reshape(shape[0], 1, shape[1], shape[2])`'
-                    'Note: Do not use `to_channels_fir()` in above cases.')
-            else:
-                raise ValueError('Your input dimension tensor is incorrect.')
+        shape = np_data.shape
+        if len(shape) == 5:
+            np_data = np.transpose(np_data, (0, 4, 1, 2, 3))
+        elif len(shape) == 4:
+            np_data = np.transpose(np_data, (0, 3, 1, 2))
+        elif len(shape) == 3:
+            raise ValueError(
+                'Your data is either a textual data of shape '
+                '`(num_sample, step, feature)` or a grey scale image of '
+                'shape `(num_sample, rows, cols)`. '
+                'Case 1: If your data is time-series or a textual data'
+                '(probably you are using Conv1D), then there is no need of '
+                'channel conversion.'
+                'Case 2: If your data is image(probably you are using '
+                'Conv2D), then you need to reshape the tension dimensions '
+                'as follows:'
+                '`shape = x_input.shape`'
+                '`x_input = x_input.reshape(shape[0], 1, shape[1], shape[2])`'
+                'Note: Do not use `to_channels_fir()` in above cases.')
         else:
-            warnings.warn(
-                '`to_channels_first()` method transform the data from'
-                '`channels_last` format to `channels_first` format. Please '
-                'check the `image_data_format` and `backend` in `keras.json` '
-                'file.', stacklevel=2)
+            raise ValueError('Your input dimension tensor is incorrect.')
         return np_data
 
     assert data is not None, "A Numpy data should not be None"

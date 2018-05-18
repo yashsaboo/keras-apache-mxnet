@@ -9,16 +9,24 @@
 
 Please see [RNN with Keras-MXNet document](../docs/mxnet_backend/using_rnn_with_mxnet_backend.md) for more details on
  the poor CPU training performance and unsupported functionalities. 
- 
+
+ ### Configuration
+|                  |                                                              |
+| :--------------- | :----------------------------------------------------------- |
+| Keras            | v2.1.6                                                       |
+| TensorFlow       | v1.8.0                                                       |
+| MXNet            | v1.2.0                                                       |
+| CUDA             | v9.0.176                                                     |
+| cuDNN            | v7.0.1                                                       |
 
 ### LSTM-Nietzsche
 
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Epoch), (GPU Mem)   | Keras-TensorFlow (Time/Epoch), (GPU Mem)   |
 |---|---|---|---|---|
 |  C5.18X Large | 0  | 128  | 78 sec, N/A | 55 sec, N/A|
-|  P3.8X Large |  1 |  128 | 52 sec, 792 MB | 51 sec, 15360 MB|
-|  P3.8X Large | 4  | 128  | 47 sec, 770 MB | 87 sec, 15410 MB |
-|  P3.16X Large | 8  | 128  | TBD | TBD |
+|  P3.8X Large |  1 |  128 | 52 sec, 792 MB | 83 sec, 15360 MB|
+|  P3.8X Large | 4  | 128  | 47 sec, 770 MB | 117 sec, 15410 MB |
+|  P3.16X Large | 8  | 128  | 72 sec, 826 MB | 183sec, 15408TBD |
 
 ### LSTM-WikiText2
 
@@ -27,7 +35,7 @@ Please see [RNN with Keras-MXNet document](../docs/mxnet_backend/using_rnn_with_
 |  C5.18X Large | 0  | 128  | 1345 sec, N/A  | 875, N/A  |
 |  P3.8X Large |  1 |  128 | 868 sec, 772 MB | 817, 15360 MB  |
 |  P3.8X Large | 4  | 128  | 775 sec, 764 MB | 1468, 15410 MB  |
-|  P3.16X Large | 8  | 128  | TBD | TBD |
+|  P3.16X Large | 8  | 128  | 1214 sec, 826 MB | 3176 sec, 15410 MB |
 
 ### Synthetic Data
 
@@ -36,7 +44,7 @@ Please see [RNN with Keras-MXNet document](../docs/mxnet_backend/using_rnn_with_
 |  C5.18X Large | 0  | 128  | 24 sec, N/A | 14 sec, N/A|
 |  P3.8X Large |  1 |  128 | 13 sec, 792 MB | 12 sec, 15360 MB|
 |  P3.8X Large | 4  | 128  | 12 sec, 770 MB | 21 sec, 15410 MB |
-|  P3.16X Large | 8  | 128  | TBD | TBD |
+|  P3.16X Large | 8  | 128  | 19 sec, 826 MB | 49 sec, 15360 MB |
 
 
 # Detailed RNN Benchmark Results

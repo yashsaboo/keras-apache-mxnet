@@ -44,9 +44,7 @@ class LstmBenchmark:
     def run_benchmark(self, gpus=0, inference=False, use_dataset_tensors=False, epochs=20):
         # prepare logging
         # file name: backend_data_format_dataset_model_batch_size_gpus.log
-        log_file = keras.backend.backend() + '_' + keras.backend.image_data_format() + \
-                   '_lstm_synthetic_batch_size_' + \
-                   str(self.batch_size) + '_' + str(gpus) + 'gpus.log'
+        log_file = keras.backend.backend() + '_' + keras.backend.image_data_format() + '_lstm_synthetic_batch_size_' + str(self.batch_size) + '_' + str(gpus) + 'gpus.log'  # nopep8
         logging.basicConfig(level=logging.INFO, filename=log_file)
 
         self.epochs = epochs
