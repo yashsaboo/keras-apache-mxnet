@@ -62,9 +62,9 @@ NOTE:
 
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
-|  P3.8X Large | 1  | 32  | 202  | 52  |
+|  P3.8X Large | 1  | 32  | 135  | 52  |
 |  P3.8X Large |  4 |  128 | 536  | 162  |
-|  P3.16X Large | 8  | 256  | 681  | 209  |
+|  P3.16X Large | 8  | 256  | 722  | 211  |
 
 #### ResNet50-Synthetic Data
 
@@ -81,8 +81,8 @@ NOTE:
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
 |  C5.18X Large | 0  | 32  | 87  | 59  |
-|  P3.8X Large | 1  | 32  | 831  | 498  |
-|  P3.8X Large |  4 |  128 | 1783  | 1020  |
+|  P3.8X Large | 1  | 32  | 831  | 509  |
+|  P3.8X Large |  4 |  128 | 1783  | 699  |
 |  P3.16X Large | 8  | 256  | 1680  | 435  |
 
 
@@ -210,10 +210,10 @@ For MXNet backend benchmarks:
 
 For TensorFlow backend benchmarks:
 ```
-    $ sh run_tf_backend.sh cpu_config lstm_nietzsche False 20 # For CPU Benchmarks
-    $ sh run_tf_backend.sh gpu_config lstm_nietzsche False 20 # For 1 GPU Benchmarks
-    $ sh run_tf_backend.sh 4_gpu_config lstm_nietzsche False 20 # For 4 GPU Benchmarks
-    $ sh run_tf_backend.sh 8_gpu_config lstm_nietzsche False 20 # For 8 GPU Benchmarks
+    $ sh run_tf_backend.sh cpu_config lstm_nietzsche False 10 # For CPU Benchmarks
+    $ sh run_tf_backend.sh gpu_config lstm_nietzsche False 10 # For 1 GPU Benchmarks
+    $ sh run_tf_backend.sh 4_gpu_config lstm_nietzsche False 10 # For 4 GPU Benchmarks
+    $ sh run_tf_backend.sh 8_gpu_config lstm_nietzsche False 10 # For 8 GPU Benchmarks
 ```
 
 #### LSTM-WikiText2
@@ -230,10 +230,10 @@ For MXNet backend benchmarks:
 
 For TensorFlow backend benchmarks:
 ```
-    $ sh run_tf_backend.sh cpu_config lstm_wikitext2 False 20 # For CPU Benchmarks
-    $ sh run_tf_backend.sh gpu_config lstm_wikitext2 False 20 # For 1 GPU Benchmarks
-    $ sh run_tf_backend.sh 4_gpu_config lstm_wikitext2 False 20 # For 4 GPU Benchmarks
-    $ sh run_tf_backend.sh 8_gpu_config lstm_wikitext2 False 20 # For 8 GPU Benchmarks
+    $ sh run_tf_backend.sh cpu_config lstm_wikitext2 False 10 # For CPU Benchmarks
+    $ sh run_tf_backend.sh gpu_config lstm_wikitext2 False 10 # For 1 GPU Benchmarks
+    $ sh run_tf_backend.sh 4_gpu_config lstm_wikitext2 False 10 # For 4 GPU Benchmarks
+    $ sh run_tf_backend.sh 8_gpu_config lstm_wikitext2 False 10 # For 8 GPU Benchmarks
 ```
 
 
@@ -241,12 +241,21 @@ For TensorFlow backend benchmarks:
 
 You can use the utility shell script to run the RNN benchmark on the Synthetic dataset.
 
-| Instance    | GPUs | MXNet Backend<br />Speed/Epoch | TensorFlow Backend<br />Speed/Epoch |
-| :----------- | :---- | :------------------------------ | :----------------------------------- |
-| C5.18xLarge | 0    | 1345s 398us/step               | 875s 259us/step                     |
-| P3.8xLarge  | 1    | 868s 257us/step                | 817s 242us/step                     |
-| P3.8xLarge  | 4    | 775s 229us/step                | 1468s 434us/step                    |
-## Credits
+For MXNet backend benchmarks:
+```
+    $ sh run_mxnet_backend.sh cpu_config lstm_synthetic False 10 # For CPU Benchmarks
+    $ sh run_mxnet_backend.sh gpu_config lstm_synthetic False 10 # For 1 GPU Benchmarks
+    $ sh run_mxnet_backend.sh 4_gpu_config lstm_synthetic False 10 # For 4 GPU Benchmarks
+    $ sh run_mxnet_backend.sh 8_gpu_config lstm_synthetic False 10 # For 8 GPU Benchmarks
+```
+
+For TensorFlow backend benchmarks:
+```
+    $ sh run_tf_backend.sh cpu_config lstm_synthetic False 10 # For CPU Benchmarks
+    $ sh run_tf_backend.sh gpu_config lstm_synthetic False 10 # For 1 GPU Benchmarks
+    $ sh run_tf_backend.sh 4_gpu_config lstm_synthetic False 10 # For 4 GPU Benchmarks
+    $ sh run_tf_backend.sh 8_gpu_config lstm_synthetic False 10 # For 8 GPU Benchmarks
+```
 
 ## References
 
