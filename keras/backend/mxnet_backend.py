@@ -2809,7 +2809,7 @@ def softmax(x):
     # Returns
         A tensor.
     """
-    return KerasSymbol(mx.sym.SoftmaxActivation(data=x.symbol))
+    return KerasSymbol(mx.sym.softmax(data=x.symbol))
 
 
 @keras_mxnet_symbol
