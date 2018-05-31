@@ -82,7 +82,7 @@ def test_batchnorm_correctness_2d():
 
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
-                    reason='MXNet backend does not allow predict() before compile()')
+                    reason='MXNet backend uses native BatchNorm operator. Do not do updates in the model.')
 @keras_test
 def test_batchnorm_training_argument():
     bn1 = normalization.BatchNormalization(input_shape=(10,))
@@ -160,7 +160,7 @@ def test_batchnorm_convnet_no_center_no_scale():
 
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
-                    reason='MXNet backend uses native BatchNorm operator. Do do updates in the model.')
+                    reason='MXNet backend uses native BatchNorm operator. Do not do updates in the model.')
 @keras_test
 def test_shared_batchnorm():
     '''Test that a BN layer can be shared

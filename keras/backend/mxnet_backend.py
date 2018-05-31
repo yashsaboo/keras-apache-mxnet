@@ -378,6 +378,7 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
         shape = tuple([0 if dim is None else dim for dim in shape])
     else:
         shape = tuple([0 for _ in range(ndim)])
+
     sym = _keras_variable(name, shape=shape, dtype=dtype)
     sym._keras_shape = tuple([d if d != 0 else None for d in shape])
     sym._mxnet_placeholder = True
@@ -1949,9 +1950,14 @@ def concatenate(tensors, axis=-1):
         A tensor.
     """
     if axis < 0:
-        axis += ndim(tensors[0])
+        rank = ndim(tensors[0])
+        if rank:
+            axis %= rank
+        else:
+            axis = 0
+
     tensors = [t.symbol for t in tensors]
-    return KerasSymbol(mx.sym.Concat(*tensors, dim=axis))
+    return KerasSymbol(mx.sym.concat(*tensors, dim=axis))
 
 
 @keras_mxnet_symbol
@@ -2809,7 +2815,7 @@ def softmax(x):
     # Returns
         A tensor.
     """
-    return KerasSymbol(mx.sym.SoftmaxActivation(data=x.symbol))
+    return KerasSymbol(mx.sym.softmax(data=x.symbol))
 
 
 @keras_mxnet_symbol
