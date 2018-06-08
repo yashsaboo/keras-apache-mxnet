@@ -29,7 +29,7 @@ from keras.utils import multi_gpu_model
 
 # Training parameters
 num_gpus = 4
-batch_size = 32*num_gpus  # orig paper trained all networks with batch_size=128
+batch_size = 32 * num_gpus  # orig paper trained all networks with batch_size=128
 epochs = 200
 data_augmentation = False
 data_normalization = False
