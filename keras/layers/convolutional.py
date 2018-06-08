@@ -1243,8 +1243,12 @@ class _SeparableConv(_Conv):
             raise ValueError('The channel dimension of the inputs '
                              'should be defined. Found `None`.')
         input_dim = int(input_shape[channel_axis])
-        depthwise_kernel_shape = self.kernel_size + (input_dim, self.depth_multiplier)
-        pointwise_kernel_shape = (1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
+        if self.data_format == 'channels_first' and K.backend() == 'mxnet':
+            depthwise_kernel_shape = (input_dim, self.depth_multiplier) + self.kernel_size
+            pointwise_kernel_shape = (self.filters, self.depth_multiplier * input_dim) + (1,) * self.rank
+        else:
+            depthwise_kernel_shape = self.kernel_size + (input_dim, self.depth_multiplier)
+            pointwise_kernel_shape = (1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
 
         self.depthwise_kernel = self.add_weight(
             shape=depthwise_kernel_shape,
@@ -1718,10 +1722,15 @@ class DepthwiseConv2D(Conv2D):
                              '`DepthwiseConv2D` '
                              'should be defined. Found `None`.')
         input_dim = int(input_shape[channel_axis])
-        depthwise_kernel_shape = (self.kernel_size[0],
-                                  self.kernel_size[1],
-                                  input_dim,
-                                  self.depth_multiplier)
+
+        if self.data_format == 'channels_first' and K.backend() == 'mxnet':
+            depthwise_kernel_shape = (input_dim, self.depth_multiplier, self.kernel_size[0],
+                                      self.kernel_size[1])
+        else:
+            depthwise_kernel_shape = (self.kernel_size[0],
+                                      self.kernel_size[1],
+                                      input_dim,
+                                      self.depth_multiplier)
 
         self.depthwise_kernel = self.add_weight(
             shape=depthwise_kernel_shape,

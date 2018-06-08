@@ -291,8 +291,6 @@ def test_separable_conv_1d():
                                                           batch_input_shape=(None, 5, None))])
 
 
-@pytest.mark.skipif(K.backend() == 'theano' or K.backend() == 'mxnet',
-                    reason='Theano/MXNet does not support it yet')
 @keras_test
 def test_separable_conv_2d():
     num_samples = 2
@@ -300,10 +298,13 @@ def test_separable_conv_2d():
     stack_size = 3
     num_row = 7
     num_col = 6
+    # MXNet only support depth_multiplier=1 and strides (2, 2)
+    # TODO: fully support depth_multiplier for depthwise_conv2d
+    depth_multipliers = [1] if K.backend() == 'mxnet' else [1, 2]
 
     for padding in _convolution_paddings:
         for strides in [(1, 1), (2, 2)]:
-            for multiplier in [1, 2]:
+            for multiplier in depth_multipliers:
                 for dilation_rate in [(1, 1), (2, 2), (2, 1), (1, 2)]:
                     if padding == 'same' and strides != (1, 1):
                         continue
@@ -318,7 +319,8 @@ def test_separable_conv_2d():
                                        'padding': padding,
                                        'strides': strides,
                                        'depth_multiplier': multiplier,
-                                       'dilation_rate': dilation_rate},
+                                       'dilation_rate': dilation_rate,
+                                       'data_format': 'channels_last'},
                                input_shape=(num_samples, num_row, num_col, stack_size))
 
     layer_test(convolutional.SeparableConv2D,
@@ -336,7 +338,6 @@ def test_separable_conv_2d():
                        'strides': strides,
                        'depth_multiplier': multiplier},
                input_shape=(num_samples, stack_size, num_row, num_col))
-
     # Test invalid use case
     with pytest.raises(ValueError):
         model = Sequential([convolutional.SeparableConv2D(filters=filters,
@@ -345,18 +346,19 @@ def test_separable_conv_2d():
                                                           batch_input_shape=(None, None, 5, None))])
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet does not support depthwise_conv_2d yet')
 @keras_test
 def test_depthwise_conv_2d():
     num_samples = 2
     stack_size = 3
     num_row = 7
     num_col = 6
+    # MXNet only support depth_multiplier=1
+    # TODO: fully support depth_multiplier for depthwise_conv2d
+    mutipliers = [1] if K.backend() == 'mxnet' else [1, 2]
 
     for padding in _convolution_paddings:
         for strides in [(1, 1), (2, 2)]:
-            for multiplier in [1, 2]:
+            for multiplier in mutipliers:
                 if padding == 'same' and strides != (1, 1):
                     continue
 

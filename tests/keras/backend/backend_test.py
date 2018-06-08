@@ -1133,22 +1133,30 @@ class TestBackend(object):
             with pytest.raises(ValueError):
                 k.conv3d(k.variable(xval), k.variable(kernel_val), data_format='channels_middle')
 
-    @pytest.mark.parametrize('k', [KTF], ids=['TensorFlow'])
+    @pytest.mark.parametrize('k', [KTF, KMX], ids=['TensorFlow', 'MXNet'])
     def test_depthwise_conv_2d(self, k):
         for data_format in ['channels_first', 'channels_last']:
             x_shape = (4, 4)
+            # MXNet only support depth_multiplier=1
+            # TODO: fully support depth_multiplier for depthwise_conv2d
+            depth_multiplier = 1 if k == KMX else 2
+            # default kernel shape for TensorFlow backend
+            kernel_shape = (3, 3, 3, depth_multiplier)
+
             if data_format == 'channels_first':
                 input_shape = (2, 3) + x_shape
+                # MXNet requires different kernel shape for channels first
+                if k == KMX:
+                    kernel_shape = (3, depth_multiplier, 3, 3)
             elif data_format == 'channels_last':
                 input_shape = (2,) + x_shape + (3,)
-            kernel_shape = (3, 3, 3, 2)
 
             x_val = np.ones(input_shape)
             kernel_val = np.arange(np.prod(kernel_shape)).reshape(kernel_shape)
             z = k.eval(k.depthwise_conv2d(k.variable(x_val), k.variable(kernel_val),
                                           data_format=data_format))
-
-            for z_i in np.split(z, 6, axis=1 if data_format == 'channels_first' else -1):
+            # split to num_in_channels*depth_multiplier
+            for z_i in np.split(z, 3 * depth_multiplier, axis=1 if data_format == 'channels_first' else -1):
                 assert_allclose(z_i, z_i[0] * np.ones_like(z_i))
 
         # Test invalid use cases

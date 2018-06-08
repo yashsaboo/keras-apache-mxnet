@@ -1,4 +1,6 @@
-"""Trains a ResNet on the CIFAR10 dataset.
+"""Trains a ResNet on the CIFAR10 dataset with multi-GPU.
+
+Modified from examples/cifar10_resnet.py
 
 ResNet v1
 [a] Deep Residual Learning for Image Recognition
