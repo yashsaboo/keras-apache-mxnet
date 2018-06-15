@@ -603,11 +603,8 @@ K.set_session(sess)
 # Rest of code follows ...
 ```
 
-<<<<<<< HEAD
 ---
 
-=======
->>>>>>> Rebase to latest Keras April 20 2018 (#71)
 ### How can I install HDF5 or h5py to save my models in Keras?
 
 In order to save your Keras models as HDF5 files, e.g. via
