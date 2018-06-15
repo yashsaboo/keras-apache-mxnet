@@ -7,10 +7,10 @@ from keras import applications
 from keras import backend as K
 
 
-pytestmark = pytest.mark.skipif(
-    os.environ.get('CORE_CHANGED', 'True') == 'False' and
-    os.environ.get('APP_CHANGED', 'True') == 'False',
-    reason='Runs only when the relevant files have been modified.')
+pytestmark = pytest.mark.skipif(K.backend() == 'mxnet' or
+                                os.environ.get('CORE_CHANGED', 'True') == 'False' and
+                                os.environ.get('APP_CHANGED', 'True') == 'False',
+                                reason='Runs only when the relevant files have been modified.')
 
 
 MODEL_LIST = [

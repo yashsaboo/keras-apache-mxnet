@@ -16,6 +16,7 @@ from .engine.saving import load_model
 from .engine.saving import model_from_config
 from .engine.saving import model_from_yaml
 from .engine.saving import model_from_json
+from .engine.saving import save_mxnet_model
 
 try:
     import h5py

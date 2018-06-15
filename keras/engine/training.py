@@ -1427,7 +1427,6 @@ class Model(Network):
             shuffle=shuffle,
             initial_epoch=initial_epoch)
 
-
     @interfaces.legacy_generator_methods_support
     def evaluate_generator(self, generator,
                            steps=None,
@@ -1531,3 +1530,8 @@ class Model(Network):
             workers=workers,
             use_multiprocessing=use_multiprocessing,
             verbose=verbose)
+
+# We need to overload the Keras Model class to handle MXNet model building activities.
+# get_model() returns the reference to MXNetModel that inherits and extends keras.engine.Model.
+if K.backend() == 'mxnet':
+    Model = K.get_model()

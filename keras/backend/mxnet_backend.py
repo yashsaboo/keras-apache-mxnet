@@ -338,6 +338,10 @@ def is_keras_tensor(x):
     return hasattr(x, '_keras_history')
 
 
+def is_tensor(x):
+    return isinstance(x, KerasSymbol) or isinstance(x, mx.sym.Symbol) or isinstance(x, mx.nd.NDArray)
+
+
 def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     """Instantiates a placeholder tensor and returns it.
 
@@ -2846,7 +2850,7 @@ def softsign(x):
 
 
 @keras_mxnet_symbol
-def categorical_crossentropy(target, output, from_logits=False):
+def categorical_crossentropy(target, output, from_logits=False, axis=-1):
     """Categorical crossentropy between an output tensor and a target tensor.
 
     # Arguments
@@ -2860,7 +2864,14 @@ def categorical_crossentropy(target, output, from_logits=False):
     # Returns
         Output tensor.
     """
-    axis = ndim(output) - 1
+    output_dimensions = list(range(len(int_shape(output))))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(int_shape(output)))))
+
     mx_output = output.symbol
     # scale predictions so that the class probas of each sample sum to 1
     if from_logits:
@@ -2877,7 +2888,7 @@ def categorical_crossentropy(target, output, from_logits=False):
     return KerasSymbol(mx_output)
 
 
-def sparse_categorical_crossentropy(target, output, from_logits=False):
+def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     """Categorical crossentropy with integer targets.
 
     # Arguments
@@ -3042,13 +3053,19 @@ def conv1d(x, kernel, strides=1, padding='valid',
         data_format = image_data_format()
     _validate_data_format(data_format)
 
-    # Causal requires temporal padding.
-    # MXNet backend does not support temporal padding on 3D tensor.
-    if padding is 'causal':
-        raise ValueError('MXNet Backend: conv1d does not support "causal" padding mode')
+    if padding not in {'same', 'valid', 'causal'}:
+        raise ValueError('MXNet Backend: `padding` should be either `same`, `valid` or `causal`.')
 
-    if padding not in {'same', 'valid'}:
-        raise ValueError('MXNet Backend: `padding` should be either `same` or `valid`.')
+    if ndim(x) != 3:
+        raise ValueError('MXNet Backend: Conv1D with causal padding is supported only for 3D tensors')
+
+    # Causal requires temporal padding.
+    # Add temporal padding
+    kernel_shape = kernel.shape
+    if padding == 'causal':
+        pad = dilation_rate * (kernel_shape[0] - 1)
+        x = temporal_padding(x, (pad, 0))
+        padding = 'valid'
 
     if hasattr(x, '_keras_shape'):
         shape = x._keras_shape
@@ -3162,6 +3179,28 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
         raise ValueError('MXNet Backend: `padding` should be either `same` or `valid`.')
 
     return _convnd_transpose(x, kernel, output_shape, name='conv2d_transpose', strides=strides, data_format=data_format)
+
+
+def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
+                     padding='valid', data_format=None, dilation_rate=1):
+    """1D convolution with separable filters.
+
+    # Arguments
+        x: input tensor
+        depthwise_kernel: convolution kernel for the depthwise convolution.
+        pointwise_kernel: kernel for the 1x1 convolution.
+        strides: strides integer.
+        padding: string, `"same"` or `"valid"`.
+        data_format: string, `"channels_last"` or `"channels_first"`.
+        dilation_rate: integer dilation rate.
+
+    # Returns
+        Output tensor.
+
+    # Raises
+        ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
+    """
+    raise NotImplementedError('MXNet Backend: Separable Conv1D not supported yet!')
 
 
 def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
@@ -3522,9 +3561,9 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
         mx.random.seed(seed)
     else:
         mx.random.seed(int(10e6))
-    sym = mx.sym.random.normal(shape=shape, loc=mean, scale=stddev, dtype=dtype)
-    sym = mx.sym.clip(data=sym, a_min=mean - 2 * stddev, a_max=mean + 2 * stddev)
-    return KerasSymbol(sym)
+    ran = mx.sym.random.normal(shape=shape, loc=mean, scale=stddev, dtype=dtype)
+    res = mx.sym.clip(data=ran, a_min=mean - 2 * stddev, a_max=mean + 2 * stddev)
+    return KerasSymbol(res)
 
 
 # CTC(Connectionist Temporal Classification)
@@ -4534,16 +4573,27 @@ def get_model():
     engine = importlib.import_module('keras.engine.training')
 
     class Model(engine.Model):
-        """The `Model` class adds training & evaluation routines to a `Container`. This class extends
+        """The `Model` class adds training & evaluation routines to a `Network`. This class extends
         keras.engine.Model to add MXNet Module to perform training and inference with MXNet backend.
         """
+        def __init__(self, *args, **kwargs):
+            if 'name' not in kwargs:
+                prefix = self.__class__.__name__.lower()
+                name = prefix + '_' + str(get_uid(prefix))
+                kwargs['name'] = name
 
-        def __init__(self, inputs, outputs, name=None, context=None, kvstore='device', **kwargs):
-            super(Model, self).__init__(inputs, outputs, name)
-            self._num_data = len(self.inputs)
-            self._num_label = len(self.outputs) + len(self.output_names)
-            self._context = self.get_mxnet_context(context)
-            self._kvstore = kvstore
+            self.name = kwargs['name']
+
+            super(Model, self).__init__(*args, **kwargs)
+
+            if 'context' not in kwargs:
+                kwargs['context'] = None
+
+            if 'kvstore' not in kwargs:
+                kwargs['kvstore'] = 'device'
+
+            self._context = self.get_mxnet_context(kwargs['context'])
+            self._kvstore = kwargs['kvstore']
 
             self._data_names = None
             self._label_names = None
@@ -4563,19 +4613,38 @@ def get_model():
             self._weights_dirty = None
             self._module = None
 
-            # Create Module for Inference
             self.compiled = False
-            self._create_predict_module()
 
-        def compile(self, optimizer, loss, metrics=None, loss_weights=None,
+            if self.built:
+                self._num_data = len(self.inputs)
+                self._num_label = len(self.outputs) + len(self.output_names)
+                # Create Module for Inference
+                self._create_predict_module()
+            else:
+                self._num_data = None
+                self._num_label = None
+
+        def compile(self, optimizer, loss=None, metrics=None, loss_weights=None,
                     sample_weight_mode=None, **kwargs):
             super(Model, self).compile(
                 optimizer, loss, metrics, loss_weights,
                 sample_weight_mode, **kwargs)
 
+            if not self.built:
+                # Model is not compilable because
+                # it does not know its number of inputs
+                # and outputs, nor their shapes and names.
+                # We will compile after the first
+                # time the model gets called on training data.
+                return
+
             # If context is passed in kwargs
             if 'context' in kwargs:
                 self._context = self.get_mxnet_context(kwargs['context'])
+
+            if self.built:
+                self._num_data = len(self.inputs)
+                self._num_label = len(self.outputs) + len(self.output_names)
 
             # set the data and label
             self._data_names = [x.name for x in self.inputs if x]
@@ -4757,6 +4826,11 @@ def get_model():
             def predict_function(inputs):
                 # used predict only module if predict is called without compile
                 if not self.compiled:
+                    if self.built:
+                        self._num_data = len(self.inputs)
+                        self._num_label = len(self.outputs) + len(self.output_names)
+                        # Create Module for Inference
+                        self._create_predict_module()
                     self._module = self._predict_only_module
                     set_model(self)
 
@@ -4874,6 +4948,38 @@ def get_model():
             self._context = self.get_mxnet_context(gpus)
 
     return Model
+
+
+def get_sequential_model():
+    """Prepares Sequential Model class that can be used for training a Keras Sequential Model with MXNet backend.
+    Inherits and extends keras.engine.Model and keras.engine.Sequential class.
+
+    # Returns
+        MXNet Sequential Model reference
+    """
+    import importlib
+    sequential = importlib.import_module('keras.engine.sequential')
+    engine = importlib.import_module('keras.engine.training')
+
+    class Sequential(sequential.Sequential, engine.Model):
+        """Linear stack of layers. This class extends keras.engine.Sequential to add MXNet Module to perform training
+        and inference with MXNet backend.
+        """
+        def __init__(self, layers=None, *args, **kwargs):
+            if 'name' not in kwargs:
+                prefix = self.__class__.__name__.lower()
+                name = prefix + '_' + str(get_uid(prefix))
+                kwargs['name'] = name
+
+            self.name = kwargs['name']
+            engine.Model.__init__(self, *args, **kwargs)
+
+            # Add to the model any layers passed to the constructor.
+            if layers:
+                for layer in layers:
+                    self.add(layer)
+
+    return Sequential
 
 
 def get_optimizers():

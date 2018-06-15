@@ -295,13 +295,8 @@ def test_Bidirectional():
 @keras_test
 @pytest.mark.skipif((K.backend() == 'cntk'),
                     reason='Unknown timestamps not supported in CNTK.')
-<<<<<<< HEAD
 def test_Bidirectional_dynamic_timesteps():
     # test with functional API with dynamic length
-=======
-def test_Bidirectional_unkown_timespamps():
-    # test with functional API with unknown length
->>>>>>> Rebase to latest Keras April 20 2018 (#71)
     rnn = layers.SimpleRNN
     samples = 2
     dim = 2

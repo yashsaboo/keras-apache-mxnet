@@ -1262,6 +1262,8 @@ class TestBackend(object):
             assert np.max(rand) == 1
             assert np.min(rand) == 0
 
+    @pytest.mark.skipif(K.backend() == 'mxnet',
+                        reason="MXNet backend does not support truncated normal yet.")
     def test_truncated_normal(self):
         mean = 0.
         std = 1.

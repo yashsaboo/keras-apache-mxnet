@@ -22,7 +22,7 @@ else:
         _keras_base_dir = '/tmp'
     _keras_dir = os.path.join(_keras_base_dir, '.keras')
 
-# Default backend: TensorFlow.
+# Default backend: MXNet.
 _BACKEND = 'mxnet'
 
 # Attempt to read Keras config file.
@@ -38,10 +38,6 @@ if os.path.exists(_config_path):
     _epsilon = _config.get('epsilon', epsilon())
     assert isinstance(_epsilon, float)
     _backend = _config.get('backend', _BACKEND)
-<<<<<<< HEAD
-=======
-    assert _backend in {'theano', 'tensorflow', 'cntk', 'mxnet'}
->>>>>>> Add MXNet Backend (#59)
     _image_data_format = _config.get('image_data_format',
                                      image_data_format())
     assert _image_data_format in {'channels_last', 'channels_first'}
@@ -77,10 +73,6 @@ if not os.path.exists(_config_path):
 # Set backend based on KERAS_BACKEND flag, if applicable.
 if 'KERAS_BACKEND' in os.environ:
     _backend = os.environ['KERAS_BACKEND']
-<<<<<<< HEAD
-=======
-    assert _backend in {'theano', 'tensorflow', 'cntk', 'mxnet'}
->>>>>>> Add MXNet Backend (#59)
     _BACKEND = _backend
 
 # Import backend functions.

@@ -543,7 +543,7 @@ def test_warnings():
                    [np.random.random((batch_sz, 4)),
                     np.random.random((batch_sz, 3))])
 
-    with pytest.warns(Warning) as w:
+    with pytest.warns(UserWarning) as w:
         out = model.fit_generator(gen_data(4),
                                   steps_per_epoch=10,
                                   use_multiprocessing=True,
@@ -1400,8 +1400,12 @@ def test_model_with_crossentropy_losses_channels_first():
         simple_model.compile(optimizer='rmsprop', loss=loss)
         return simple_model
 
-    losses_to_test = ['sparse_categorical_crossentropy',
-                      'categorical_crossentropy', 'binary_crossentropy']
+    # MXNet backend does not support Sparse Categorical Crossentropy yet.
+    if K.backend() == 'mxnet':
+        losses_to_test = ['categorical_crossentropy', 'binary_crossentropy']
+    else:
+        losses_to_test = ['sparse_categorical_crossentropy',
+                          'categorical_crossentropy', 'binary_crossentropy']
 
     data_channels_first = np.array([[[[8., 7.1, 0.], [4.5, 2.6, 0.55],
                                       [0.9, 4.2, 11.2]]]], dtype=np.float32)

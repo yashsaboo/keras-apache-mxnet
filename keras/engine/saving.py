@@ -60,25 +60,18 @@ def save_mxnet_model(model, prefix, epoch=0):
 
     # Returns
         data_names, data_shapes
+
+    # Raises
+        AssertionError if Model is not compiled.
     """
     assert model is not None, 'MXNet Backend: Invalid state. Model cannot be None.'
 
-    # Handle Sequential Model / Functional API Model Case
-    if isinstance(model, Sequential):
-        mxnet_model = model.model
-    elif isinstance(model, Model):
-        mxnet_model = model
-    else:
-        raise ValueError('MXNet Backend: Invalid model type. Supported Models - Sequential, Model.')
-
-    assert mxnet_model is not None, 'MXNet Backend: Invalid state. MXNet Model cannot be None.'
-
-    if not mxnet_model.compiled:
-        raise ValueError('MXNet Backend: Model is not compiled. Cannot save the MXNet model!')
+    if not model.compiled:
+        raise AssertionError('MXNet Backend: Model is not compiled. Cannot save the MXNet model!')
 
     # Saving MXNet model for Inference in native MXNet engine.
-    symbol = mxnet_model._pred_mxnet_symbol
-    module = mxnet_model._module
+    symbol = model._pred_mxnet_symbol
+    module = model._module
 
     assert symbol is not None, 'MXNet Backend: Invalid state. MXNet Symbol cannot be None.'
     assert module is not None, 'MXNet Backend: Invalid state. MXNet Module cannot be None.'
@@ -930,7 +923,8 @@ def _need_convert_kernel(original_backend):
         return False
     uses_correlation = {'tensorflow': True,
                         'theano': False,
-                        'cntk': True}
+                        'cntk': True,
+                        'mxnet': False}
     if original_backend not in uses_correlation:
         # By default, do not convert the kernels if the original backend is unknown
         return False

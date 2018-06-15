@@ -22,6 +22,10 @@ from keras.models import Model
 from keras.layers import *
 from keras.preprocessing.image import ImageDataGenerator
 
+if K.backend() == 'mxnet':
+    raise RuntimeError('This example cannot run with MXNet backend.'
+                       'MXNet backend does not support auto infer of shape in Convolution operators.')
+
 
 # the squashing function.
 # we use 0.5 in stead of 1 in hinton's paper.

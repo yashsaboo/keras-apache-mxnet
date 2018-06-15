@@ -18,8 +18,8 @@ else:
 
 
 @keras_test
-@pytest.mark.skipif((K.backend() == 'cntk' or K.backend() == 'mxnet'),
-                    reason='cntk/mxnet do not support Causal padding in conv1d')
+@pytest.mark.skipif((K.backend() == 'cntk'),
+                    reason='cntk does not support Causal padding in conv1d')
 def test_causal_dilated_conv():
     # Causal:
     layer_test(convolutional.Conv1D,
@@ -64,6 +64,8 @@ def test_causal_dilated_conv():
                )
 
 
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not fully support Conv1D')
 @keras_test
 def test_conv_1d():
     batch_size = 2
@@ -71,8 +73,9 @@ def test_conv_1d():
     input_dim = 2
     kernel_size = 3
     filters = 3
+    paddings = _convolution_paddings + ['causal'] if K.backend() != 'theano' else _convolution_paddings
 
-    for padding in _convolution_paddings:
+    for padding in paddings:
         for strides in [1, 2]:
             if padding == 'same' and strides != 1:
                 continue
@@ -240,6 +243,8 @@ def test_conv2d_transpose():
                                                           batch_input_shape=(None, None, 5, None))])
 
 
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support Separable Conv1D yet.')
 @keras_test
 def test_separable_conv_1d():
     num_samples = 2
