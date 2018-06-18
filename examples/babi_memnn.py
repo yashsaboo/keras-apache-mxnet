@@ -28,11 +28,6 @@ import numpy as np
 import re
 
 
-if K.backend() == 'mxnet':
-    raise RuntimeError('This example cannot run with MXNet backend.'
-                       'MXNet backend does not support Sparse operators yet!')
-
-
 def tokenize(sent):
     '''Return the tokens of a sentence including punctuation.
 
