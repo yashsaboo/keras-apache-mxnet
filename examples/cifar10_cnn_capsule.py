@@ -14,13 +14,17 @@ This is a fast Implement, just 20s/epcoh with a gtx 1070 gpu.
 
 from __future__ import print_function
 from keras import backend as K
-from keras.engine.topology import Layer
+from keras.layers import Layer
 from keras import activations
 from keras import utils
 from keras.datasets import cifar10
 from keras.models import Model
 from keras.layers import *
 from keras.preprocessing.image import ImageDataGenerator
+
+if K.backend() == 'mxnet':
+    raise RuntimeError('This example cannot run with MXNet backend.'
+                       'MXNet backend does not support auto infer of shape in Convolution operators.')
 
 
 # the squashing function.
@@ -204,11 +208,21 @@ else:
         featurewise_std_normalization=False,  # divide inputs by dataset std
         samplewise_std_normalization=False,  # divide each input by its std
         zca_whitening=False,  # apply ZCA whitening
+        zca_epsilon=1e-06,  # epsilon for ZCA whitening
         rotation_range=0,  # randomly rotate images in 0 to 180 degrees
         width_shift_range=0.1,  # randomly shift images horizontally
         height_shift_range=0.1,  # randomly shift images vertically
+        shear_range=0.,  # set range for random shear
+        zoom_range=0.,  # set range for random zoom
+        channel_shift_range=0.,  # set range for random channel shifts
+        fill_mode='nearest',  # set mode for filling points outside the input boundaries
+        cval=0.,  # value used for fill_mode = "constant"
         horizontal_flip=True,  # randomly flip images
-        vertical_flip=False)  # randomly flip images
+        vertical_flip=False,  # randomly flip images
+        rescale=None,  # set rescaling factor (applied before any other transformation)
+        preprocessing_function=None,  # set function that will be applied on each input
+        data_format=None,  # image data format, either "channels_first" or "channels_last"
+        validation_split=0.0)  # fraction of images reserved for validation (strictly between 0 and 1)
 
     # Compute quantities required for feature-wise normalization
     # (std, mean, and principal components if ZCA whitening is applied).

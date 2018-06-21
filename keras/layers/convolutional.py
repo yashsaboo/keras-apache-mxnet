@@ -10,8 +10,8 @@ from .. import activations
 from .. import initializers
 from .. import regularizers
 from .. import constraints
-from ..engine import Layer
-from ..engine import InputSpec
+from ..engine.base_layer import Layer
+from ..engine.base_layer import InputSpec
 from ..utils import conv_utils
 from ..legacy import interfaces
 
@@ -49,10 +49,10 @@ class _Conv(Layer):
             any `dilation_rate` value != 1.
         padding: One of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, ..., channels)` while `channels_first` corresponds to
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, ..., channels)` while `"channels_first"` corresponds to
             inputs with shape `(batch, channels, ...)`.
             It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
@@ -271,6 +271,14 @@ class Conv1D(_Conv):
             does not depend on input[t+1:]. Useful when modeling temporal data
             where the model should not violate the temporal order.
             See [WaveNet: A Generative Model for Raw Audio, section 2.1](https://arxiv.org/abs/1609.03499).
+        data_format: A string,
+            one of `"channels_last"` (default) or `"channels_first"`.
+            The ordering of the dimensions in the inputs.
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, length, channels)`
+            (default format for temporal data in Keras)
+            while `"channels_first"` corresponds to inputs
+            with shape `(batch, channels, length)`.
         dilation_rate: an integer or tuple/list of a single integer, specifying
             the dilation rate to use for dilated convolution.
             Currently, specifying any `dilation_rate` value != 1 is
@@ -310,6 +318,7 @@ class Conv1D(_Conv):
                  kernel_size,
                  strides=1,
                  padding='valid',
+                 data_format='channels_last',
                  dilation_rate=1,
                  activation=None,
                  use_bias=True,
@@ -321,13 +330,18 @@ class Conv1D(_Conv):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
+        if padding == 'causal':
+            if data_format != 'channels_last':
+                raise ValueError('When using causal padding in `Conv1D`, '
+                                 '`data_format` must be "channels_last" '
+                                 '(temporal data).')
         super(Conv1D, self).__init__(
             rank=1,
             filters=filters,
             kernel_size=kernel_size,
             strides=strides,
             padding=padding,
-            data_format='channels_last',
+            data_format=data_format,
             dilation_rate=dilation_rate,
             activation=activation,
             use_bias=use_bias,
@@ -344,7 +358,6 @@ class Conv1D(_Conv):
     def get_config(self):
         config = super(Conv1D, self).get_config()
         config.pop('rank')
-        config.pop('data_format')
         return config
 
 
@@ -367,11 +380,12 @@ class Conv2D(_Conv):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
-            width and height of the 2D convolution window.
+            height and width of the 2D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 2 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
@@ -381,10 +395,10 @@ class Conv2D(_Conv):
             `strides` != 1, as described
             [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -420,15 +434,19 @@ class Conv2D(_Conv):
 
     # Input shape
         4D tensor with shape:
-        `(samples, channels, rows, cols)` if data_format='channels_first'
+        `(samples, channels, rows, cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(samples, rows, cols, channels)` if data_format='channels_last'.
+        `(samples, rows, cols, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         4D tensor with shape:
-        `(samples, filters, new_rows, new_cols)` if data_format='channels_first'
+        `(samples, filters, new_rows, new_cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(samples, new_rows, new_cols, filters)` if data_format='channels_last'.
+        `(samples, new_rows, new_cols, filters)`
+        if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
     """
 
@@ -505,12 +523,15 @@ class Conv3D(_Conv):
             Specifying any stride value != 1 is incompatible with specifying
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
+            Note that `"same"` is slightly inconsistent across backends with
+            `strides` != 1, as described
+            [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
+            `"channels_last"` corresponds to inputs with shape
             `(batch, spatial_dim1, spatial_dim2, spatial_dim3, channels)`
-            while `channels_first` corresponds to inputs with shape
+            while `"channels_first"` corresponds to inputs with shape
             `(batch, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
             It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
@@ -545,15 +566,19 @@ class Conv3D(_Conv):
 
     # Input shape
         5D tensor with shape:
-        `(samples, channels, conv_dim1, conv_dim2, conv_dim3)` if data_format='channels_first'
+        `(samples, channels, conv_dim1, conv_dim2, conv_dim3)`
+        if `data_format` is `"channels_first"`
         or 5D tensor with shape:
-        `(samples, conv_dim1, conv_dim2, conv_dim3, channels)` if data_format='channels_last'.
+        `(samples, conv_dim1, conv_dim2, conv_dim3, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         5D tensor with shape:
-        `(samples, filters, new_conv_dim1, new_conv_dim2, new_conv_dim3)` if data_format='channels_first'
+        `(samples, filters, new_conv_dim1, new_conv_dim2, new_conv_dim3)`
+        if `data_format` is `"channels_first"`
         or 5D tensor with shape:
-        `(samples, new_conv_dim1, new_conv_dim2, new_conv_dim3, filters)` if data_format='channels_last'.
+        `(samples, new_conv_dim1, new_conv_dim2, new_conv_dim3, filters)`
+        if `data_format` is `"channels_last"`.
         `new_conv_dim1`, `new_conv_dim2` and `new_conv_dim3` values might have changed due to padding.
     """
 
@@ -620,21 +645,22 @@ class Conv2DTranspose(Conv2D):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
-            width and height of the 2D convolution window.
+            height and width of the 2D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 2 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -670,15 +696,19 @@ class Conv2DTranspose(Conv2D):
 
     # Input shape
         4D tensor with shape:
-        `(batch, channels, rows, cols)` if data_format='channels_first'
+        `(batch, channels, rows, cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, rows, cols, channels)` if data_format='channels_last'.
+        `(batch, rows, cols, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         4D tensor with shape:
-        `(batch, filters, new_rows, new_cols)` if data_format='channels_first'
+        `(batch, filters, new_rows, new_cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, new_rows, new_cols, filters)` if data_format='channels_last'.
+        `(batch, new_rows, new_cols, filters)`
+        if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
 
     # References
@@ -841,21 +871,22 @@ class Conv3DTranspose(Conv3D):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 3 integers, specifying the
-            width and height of the 3D convolution window.
+            depth, height and width of the 3D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 3 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the depth, height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, depth, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, depth, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, depth, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -891,15 +922,19 @@ class Conv3DTranspose(Conv3D):
 
     # Input shape
         5D tensor with shape:
-        `(batch, channels, depth, rows, cols)` if data_format='channels_first'
+        `(batch, channels, depth, rows, cols)`
+        if `data_format` is `"channels_first"`
         or 5D tensor with shape:
-        `(batch, depth, rows, cols, channels)` if data_format='channels_last'.
+        `(batch, depth, rows, cols, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         5D tensor with shape:
-        `(batch, filters, new_depth, new_rows, new_cols)` if data_format='channels_first'
+        `(batch, filters, new_depth, new_rows, new_cols)`
+        if `data_format` is `"channels_first"`
         or 5D tensor with shape:
-        `(batch, new_depth, new_rows, new_cols, filters)` if data_format='channels_last'.
+        `(batch, new_depth, new_rows, new_cols, filters)`
+        if `data_format` is `"channels_last"`.
         `depth` and `rows` and `cols` values might have changed due to padding.
 
     # References
@@ -1075,21 +1110,22 @@ class _SeparableConv(_Conv):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
-            width and height of the 2D convolution window.
+            height and width of the 2D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 2 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -1138,15 +1174,19 @@ class _SeparableConv(_Conv):
 
     # Input shape
         4D tensor with shape:
-        `(batch, channels, rows, cols)` if data_format='channels_first'
+        `(batch, channels, rows, cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, rows, cols, channels)` if data_format='channels_last'.
+        `(batch, rows, cols, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         4D tensor with shape:
-        `(batch, filters, new_rows, new_cols)` if data_format='channels_first'
+        `(batch, filters, new_rows, new_cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, new_rows, new_cols, filters)` if data_format='channels_last'.
+        `(batch, new_rows, new_cols, filters)`
+        if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
     """
 
@@ -1203,8 +1243,12 @@ class _SeparableConv(_Conv):
             raise ValueError('The channel dimension of the inputs '
                              'should be defined. Found `None`.')
         input_dim = int(input_shape[channel_axis])
-        depthwise_kernel_shape = self.kernel_size + (input_dim, self.depth_multiplier)
-        pointwise_kernel_shape = (1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
+        if self.data_format == 'channels_first' and K.backend() == 'mxnet':
+            depthwise_kernel_shape = (input_dim, self.depth_multiplier) + self.kernel_size
+            pointwise_kernel_shape = (self.filters, self.depth_multiplier * input_dim) + (1,) * self.rank
+        else:
+            depthwise_kernel_shape = self.kernel_size + (input_dim, self.depth_multiplier)
+            pointwise_kernel_shape = (1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
 
         self.depthwise_kernel = self.add_weight(
             shape=depthwise_kernel_shape,
@@ -1303,10 +1347,10 @@ class SeparableConv1D(_SeparableConv):
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -1353,15 +1397,19 @@ class SeparableConv1D(_SeparableConv):
 
     # Input shape
         3D tensor with shape:
-        `(batch, channels, steps)` if data_format='channels_first'
+        `(batch, channels, steps)`
+        if `data_format` is `"channels_first"`
         or 3D tensor with shape:
-        `(batch, steps, channels)` if data_format='channels_last'.
+        `(batch, steps, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         3D tensor with shape:
-        `(batch, filters, new_steps)` if data_format='channels_first'
+        `(batch, filters, new_steps)`
+        if `data_format` is `"channels_first"`
         or 3D tensor with shape:
-        `(batch, new_steps, filters)` if data_format='channels_last'.
+        `(batch, new_steps, filters)`
+        if `data_format` is `"channels_last"`.
         `new_steps` values might have changed due to padding or strides.
     """
 
@@ -1427,21 +1475,22 @@ class SeparableConv2D(_SeparableConv):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
-            width and height of the 2D convolution window.
+            height and width of the 2D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 2 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
             any `dilation_rate` value != 1.
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -1488,15 +1537,19 @@ class SeparableConv2D(_SeparableConv):
 
     # Input shape
         4D tensor with shape:
-        `(batch, channels, rows, cols)` if data_format='channels_first'
+        `(batch, channels, rows, cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, rows, cols, channels)` if data_format='channels_last'.
+        `(batch, rows, cols, channels)`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         4D tensor with shape:
-        `(batch, filters, new_rows, new_cols)` if data_format='channels_first'
+        `(batch, filters, new_rows, new_cols)`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, new_rows, new_cols, filters)` if data_format='channels_last'.
+        `(batch, new_rows, new_cols, filters)`
+        if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
     """
 
@@ -1556,11 +1609,12 @@ class DepthwiseConv2D(Conv2D):
 
     # Arguments
         kernel_size: An integer or tuple/list of 2 integers, specifying the
-            width and height of the 2D convolution window.
+            height and width of the 2D convolution window.
             Can be a single integer to specify the same value for
             all spatial dimensions.
         strides: An integer or tuple/list of 2 integers,
-            specifying the strides of the convolution along the width and height.
+            specifying the strides of the convolution
+            along the height and width.
             Can be a single integer to specify the same value for
             all spatial dimensions.
             Specifying any stride value != 1 is incompatible with specifying
@@ -1571,10 +1625,10 @@ class DepthwiseConv2D(Conv2D):
             The total number of depthwise convolution output
             channels will be equal to `filters_in * depth_multiplier`.
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -1605,15 +1659,19 @@ class DepthwiseConv2D(Conv2D):
 
     # Input shape
         4D tensor with shape:
-        `[batch, channels, rows, cols]` if data_format='channels_first'
+        `[batch, channels, rows, cols]`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `[batch, rows, cols, channels]` if data_format='channels_last'.
+        `[batch, rows, cols, channels]`
+        if `data_format` is `"channels_last"`.
 
     # Output shape
         4D tensor with shape:
-        `[batch, filters, new_rows, new_cols]` if data_format='channels_first'
+        `[batch, filters, new_rows, new_cols]`
+        if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `[batch, new_rows, new_cols, filters]` if data_format='channels_last'.
+        `[batch, new_rows, new_cols, filters]`
+        if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
     """
 
@@ -1664,10 +1722,15 @@ class DepthwiseConv2D(Conv2D):
                              '`DepthwiseConv2D` '
                              'should be defined. Found `None`.')
         input_dim = int(input_shape[channel_axis])
-        depthwise_kernel_shape = (self.kernel_size[0],
-                                  self.kernel_size[1],
-                                  input_dim,
-                                  self.depth_multiplier)
+
+        if self.data_format == 'channels_first' and K.backend() == 'mxnet':
+            depthwise_kernel_shape = (input_dim, self.depth_multiplier, self.kernel_size[0],
+                                      self.kernel_size[1])
+        else:
+            depthwise_kernel_shape = (self.kernel_size[0],
+                                      self.kernel_size[1],
+                                      input_dim,
+                                      self.depth_multiplier)
 
         self.depthwise_kernel = self.add_weight(
             shape=depthwise_kernel_shape,
@@ -1787,10 +1850,10 @@ class UpSampling2D(Layer):
         size: int, or tuple of 2 integers.
             The upsampling factors for rows and columns.
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -1856,11 +1919,11 @@ class UpSampling3D(Layer):
         size: int, or tuple of 3 integers.
             The upsampling factors for dim1, dim2 and dim3.
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
+            `"channels_last"` corresponds to inputs with shape
             `(batch, spatial_dim1, spatial_dim2, spatial_dim3, channels)`
-            while `channels_first` corresponds to inputs with shape
+            while `"channels_first"` corresponds to inputs with shape
             `(batch, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
             It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
@@ -1971,7 +2034,7 @@ class ZeroPadding2D(Layer):
     # Arguments
         padding: int, or tuple of 2 ints, or tuple of 2 tuples of 2 ints.
             - If int: the same symmetric padding
-                is applied to width and height.
+                is applied to height and width.
             - If tuple of 2 ints:
                 interpreted as two different
                 symmetric padding values for height and width:
@@ -1980,10 +2043,10 @@ class ZeroPadding2D(Layer):
                 interpreted as
                 `((top_pad, bottom_pad), (left_pad, right_pad))`
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -2078,7 +2141,7 @@ class ZeroPadding3D(Layer):
     # Arguments
         padding: int, or tuple of 3 ints, or tuple of 3 tuples of 2 ints.
             - If int: the same symmetric padding
-                is applied to width and height.
+                is applied to height and width.
             - If tuple of 3 ints:
                 interpreted as two different
                 symmetric padding values for height and width:
@@ -2087,11 +2150,11 @@ class ZeroPadding3D(Layer):
                 interpreted as
                 `((left_dim1_pad, right_dim1_pad), (left_dim2_pad, right_dim2_pad), (left_dim3_pad, right_dim3_pad))`
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
+            `"channels_last"` corresponds to inputs with shape
             `(batch, spatial_dim1, spatial_dim2, spatial_dim3, channels)`
-            while `channels_first` corresponds to inputs with shape
+            while `"channels_first"` corresponds to inputs with shape
             `(batch, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
             It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
@@ -2238,12 +2301,12 @@ class Cropping1D(Layer):
 class Cropping2D(Layer):
     """Cropping layer for 2D input (e.g. picture).
 
-    It crops along spatial dimensions, i.e. width and height.
+    It crops along spatial dimensions, i.e. height and width.
 
     # Arguments
         cropping: int, or tuple of 2 ints, or tuple of 2 tuples of 2 ints.
             - If int: the same symmetric cropping
-                is applied to width and height.
+                is applied to height and width.
             - If tuple of 2 ints:
                 interpreted as two different
                 symmetric cropping values for height and width:
@@ -2252,10 +2315,10 @@ class Cropping2D(Layer):
                 interpreted as
                 `((top_crop, bottom_crop), (left_crop, right_crop))`
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
+            `"channels_last"` corresponds to inputs with shape
+            `(batch, height, width, channels)` while `"channels_first"`
             corresponds to inputs with shape
             `(batch, channels, height, width)`.
             It defaults to the `image_data_format` value found in your
@@ -2393,11 +2456,11 @@ class Cropping3D(Layer):
                 interpreted as
                 `((left_dim1_crop, right_dim1_crop), (left_dim2_crop, right_dim2_crop), (left_dim3_crop, right_dim3_crop))`
         data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
+            one of `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
+            `"channels_last"` corresponds to inputs with shape
             `(batch, spatial_dim1, spatial_dim2, spatial_dim3, channels)`
-            while `channels_first` corresponds to inputs with shape
+            while `"channels_first"` corresponds to inputs with shape
             `(batch, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
             It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.

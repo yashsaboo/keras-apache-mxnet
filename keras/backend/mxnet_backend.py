@@ -338,6 +338,10 @@ def is_keras_tensor(x):
     return hasattr(x, '_keras_history')
 
 
+def is_tensor(x):
+    return isinstance(x, KerasSymbol) or isinstance(x, mx.sym.Symbol) or isinstance(x, mx.nd.NDArray)
+
+
 def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     """Instantiates a placeholder tensor and returns it.
 
@@ -378,6 +382,7 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
         shape = tuple([0 if dim is None else dim for dim in shape])
     else:
         shape = tuple([0 for _ in range(ndim)])
+
     sym = _keras_variable(name, shape=shape, dtype=dtype)
     sym._keras_shape = tuple([d if d != 0 else None for d in shape])
     sym._mxnet_placeholder = True
@@ -1949,9 +1954,14 @@ def concatenate(tensors, axis=-1):
         A tensor.
     """
     if axis < 0:
-        axis += ndim(tensors[0])
+        rank = ndim(tensors[0])
+        if rank:
+            axis %= rank
+        else:
+            axis = 0
+
     tensors = [t.symbol for t in tensors]
-    return KerasSymbol(mx.sym.Concat(*tensors, dim=axis))
+    return KerasSymbol(mx.sym.concat(*tensors, dim=axis))
 
 
 @keras_mxnet_symbol
@@ -2599,7 +2609,8 @@ def rnn(step_function, inputs, initial_states,
         warnings.warn('MXNet Backend: `unroll=False` is not supported yet in RNN. Since the input_shape is known, '
                       'setting `unroll=True` and continuing the execution.'
                       'More Details - '
-                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md', stacklevel=2)  # nopep8
+                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',
+                      stacklevel=2)  # nopep8
 
     # Split the inputs across time dimension and generate the list of inputs
     # with shape `(samples, ...)` (no time dimension)
@@ -2839,7 +2850,7 @@ def softsign(x):
 
 
 @keras_mxnet_symbol
-def categorical_crossentropy(target, output, from_logits=False):
+def categorical_crossentropy(target, output, from_logits=False, axis=-1):
     """Categorical crossentropy between an output tensor and a target tensor.
 
     # Arguments
@@ -2853,7 +2864,14 @@ def categorical_crossentropy(target, output, from_logits=False):
     # Returns
         Output tensor.
     """
-    axis = ndim(output) - 1
+    output_dimensions = list(range(len(int_shape(output))))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(int_shape(output)))))
+
     mx_output = output.symbol
     # scale predictions so that the class probas of each sample sum to 1
     if from_logits:
@@ -2870,7 +2888,7 @@ def categorical_crossentropy(target, output, from_logits=False):
     return KerasSymbol(mx_output)
 
 
-def sparse_categorical_crossentropy(target, output, from_logits=False):
+def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     """Categorical crossentropy with integer targets.
 
     # Arguments
@@ -3035,13 +3053,19 @@ def conv1d(x, kernel, strides=1, padding='valid',
         data_format = image_data_format()
     _validate_data_format(data_format)
 
-    # Causal requires temporal padding.
-    # MXNet backend does not support temporal padding on 3D tensor.
-    if padding is 'causal':
-        raise ValueError('MXNet Backend: conv1d does not support "causal" padding mode')
+    if padding not in {'same', 'valid', 'causal'}:
+        raise ValueError('MXNet Backend: `padding` should be either `same`, `valid` or `causal`.')
 
-    if padding not in {'same', 'valid'}:
-        raise ValueError('MXNet Backend: `padding` should be either `same` or `valid`.')
+    if ndim(x) != 3:
+        raise ValueError('MXNet Backend: Conv1D with causal padding is supported only for 3D tensors')
+
+    # Causal requires temporal padding.
+    # Add temporal padding
+    kernel_shape = kernel.shape
+    if padding == 'causal':
+        pad = dilation_rate * (kernel_shape[0] - 1)
+        x = temporal_padding(x, (pad, 0))
+        padding = 'valid'
 
     if hasattr(x, '_keras_shape'):
         shape = x._keras_shape
@@ -3157,6 +3181,28 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
     return _convnd_transpose(x, kernel, output_shape, name='conv2d_transpose', strides=strides, data_format=data_format)
 
 
+def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
+                     padding='valid', data_format=None, dilation_rate=1):
+    """1D convolution with separable filters.
+
+    # Arguments
+        x: input tensor
+        depthwise_kernel: convolution kernel for the depthwise convolution.
+        pointwise_kernel: kernel for the 1x1 convolution.
+        strides: strides integer.
+        padding: string, `"same"` or `"valid"`.
+        data_format: string, `"channels_last"` or `"channels_first"`.
+        dilation_rate: integer dilation rate.
+
+    # Returns
+        Output tensor.
+
+    # Raises
+        ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
+    """
+    raise NotImplementedError('MXNet Backend: Separable Conv1D not supported yet!')
+
+
 def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
                      padding='valid', data_format=None, dilation_rate=(1, 1)):
     """2D convolution with separable filters.
@@ -3177,7 +3223,17 @@ def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    raise NotImplementedError('MXNet Backend: separable_conv2d operator is not supported yet.')
+    """
+    # mathematical implementation of complete separable conv2d
+    return _sp_convnd(x,  depthwise_kernel, pointwise_kernel, strides=strides, padding_mode=padding, data_format=data_format,
+                          filter_dilation=dilation_rate)
+    """
+    # depthwise conv2d
+    dw_conv = depthwise_conv2d(x, depthwise_kernel, strides=strides, padding=padding, data_format=data_format,
+                               dilation_rate=dilation_rate)
+    # pointwise conv2d, strides is always (1, 1)
+    return _convnd(dw_conv, kernel=pointwise_kernel, strides=(1, 1), padding_mode=padding, data_format=data_format,
+                   filter_dilation=dilation_rate)
 
 
 def depthwise_conv2d(x, depthwise_kernel, strides=(1, 1), padding='valid',
@@ -3199,7 +3255,16 @@ def depthwise_conv2d(x, depthwise_kernel, strides=(1, 1), padding='valid',
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    raise NotImplementedError('MXNet Backend: depthwise_conv2d operator is not supported yet.')
+    if data_format is None:
+        data_format = image_data_format()
+    _validate_data_format(data_format)
+
+    if padding not in {'same', 'valid'}:
+        raise ValueError('MXNet Backend: `padding` should be either `same` or `valid`.')
+
+    dw_out = _dw_conv(x, depthwise_kernel, name='dw_conv2d', strides=strides, filter_dilation=dilation_rate,
+                      padding_mode=padding, data_format=data_format)
+    return dw_out
 
 
 def conv3d(x, kernel, strides=(1, 1, 1), padding='valid',
@@ -3496,9 +3561,9 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
         mx.random.seed(seed)
     else:
         mx.random.seed(int(10e6))
-    sym = mx.sym.random.normal(shape=shape, loc=mean, scale=stddev, dtype=dtype)
-    sym = mx.sym.clip(data=sym, a_min=mean - 2 * stddev, a_max=mean + 2 * stddev)
-    return KerasSymbol(sym)
+    ran = mx.sym.random.normal(shape=shape, loc=mean, scale=stddev, dtype=dtype)
+    res = mx.sym.clip(data=ran, a_min=mean - 2 * stddev, a_max=mean + 2 * stddev)
+    return KerasSymbol(res)
 
 
 # CTC(Connectionist Temporal Classification)
@@ -4075,6 +4140,7 @@ def _validate_padding_mode(padding):
         raise ValueError('MXNet Backend: `padding` should be either `same`, `full`, `valid`. '
                          'Given - ' + str(padding))
 
+
 # Convolution Helpers
 
 # Preprocess and Postprocess helper functions to manage data_format
@@ -4138,6 +4204,16 @@ def _preprocess_convnd_kernel(kernel, data_format):
 
 
 @keras_mxnet_symbol
+def _preprocess_dw_convnd_kernel(kernel, data_format):
+    # transpose depthwise and separable conv2d kernels
+    if data_format == 'channels_last':
+        if len(kernel.shape) > 3:
+            kernel = KerasSymbol(mx.sym.transpose(data=kernel.symbol, axes=(2, 3, 0, 1)))
+
+    return kernel
+
+
+@keras_mxnet_symbol
 def _preprocess_convnd_transpose_output(output_shape, data_format):
     if data_format == 'channels_last':
         output_shape = output_shape[1:-1]
@@ -4182,11 +4258,138 @@ def _preprocess_padding_mode(padding_mode, input_shape, kernel, strides, dilatio
 
 
 def _layout_kernel(kernel):
-
     layout_kernel = tuple(kernel[2:])
     nb_filter = kernel[0]
 
     return layout_kernel, nb_filter
+
+
+def _mx_dw_conv(data, num_in_channel, weight=None, kernel=(3, 3), stride=(1, 1), pad=(1, 1), name=None,
+                depth_mult=1):
+    # pure mxnet version of Separable Convolution
+    # depthwise convolution
+    channels = mx.sym.split(data=data, axis=1, num_outputs=num_in_channel)  # for new version of mxnet > 0.8
+
+    depthwise_outs = [
+        mx.sym.Convolution(data=channels[i], num_filter=num_in_channel * depth_mult, kernel=kernel, weight=weight,
+                           stride=stride, pad=pad, name=name + 'depthwise_kernel_' + str(i))
+        for i in range(num_in_channel)]
+    depthwise_out = mx.sym.concat(*depthwise_outs)
+    return depthwise_out
+
+
+def _mx_sp_conv(data, num_in_channel, num_out_channel,
+                dw_kernel_shape=(3, 3), dw_kernel_weight=None,
+                pw_kernel_shape=(1, 1), pw_kernel_weight=None,
+                stride=(1, 1), pad=(1, 1), name=None, depth_mult=1):
+    # pure mxnet version of Separable Convolution
+    # depthwise convolution
+    channels = mx.sym.split(data=data, axis=1, num_outputs=num_in_channel)  # for new version of mxnet > 0.8
+    # channels = mx.sym.SliceChannel(data=data, axis=1,
+    #                              num_outputs=num_in_channel)  # for old version of mxnet <= 0.8
+    depthwise_outs = [mx.sym.Convolution(data=channels[i], num_filter=num_in_channel,
+                                         kernel=dw_kernel_shape, weight=dw_kernel_weight,
+                                         stride=stride, pad=pad, name=name + 'dw_conv' + str(i))
+                      for i in range(num_in_channel)]
+    depthwise_out = mx.sym.concat(*depthwise_outs)
+    out = mx.sym.Convolution(data=depthwise_out, num_filter=num_out_channel,
+                             kernel=pw_kernel_shape, weight=pw_kernel_weight,
+                             stride=(1, 1), pad=pad, name='pw_conv')
+    return out
+
+
+@keras_mxnet_symbol
+def _sp_convnd(x, depthwise_kernel, pointwise_kernel, strides, filter_dilation, name=None, padding_mode='valid',
+               data_format='default'):
+    """
+    Full math implementation of separable convnd
+    """
+
+    if data_format is None or data_format == 'default':
+        data_format = image_data_format()
+
+    # Handle Data Format
+    x = _preprocess_convnd_input(x, data_format)
+    depthwise_kernel = _preprocess_dw_convnd_kernel(depthwise_kernel, data_format)
+    pointwise_kernel = _preprocess_dw_convnd_kernel(pointwise_kernel, data_format)
+
+    # We have already converted kernel to match MXNet required shape:
+    # (depth, input_depth, rows, cols)
+    depthwise_kernel_shape = depthwise_kernel.shape
+    num_in_channel = depthwise_kernel_shape[0]
+    depthwise_kernel_shape = tuple(depthwise_kernel_shape[2:])
+
+    pointwise_kernel_shape = pointwise_kernel.shape
+    num_out_channel = pointwise_kernel_shape[1]
+    pointwise_kernel_shape = tuple(pointwise_kernel_shape[2:])
+
+    # Calculate padding requirement.
+    padding, is_slice, out_size = _preprocess_padding_mode(padding_mode, x.shape,
+                                                           depthwise_kernel, strides,
+                                                           filter_dilation)
+
+    # Perform convolution.
+    conv = _mx_sp_conv(x.symbol, num_in_channel, num_out_channel,
+                       dw_kernel_shape=depthwise_kernel_shape, dw_kernel_weight=depthwise_kernel.symbol,
+                       pw_kernel_shape=pointwise_kernel_shape, pw_kernel_weight=pointwise_kernel.symbol,
+                       stride=strides, pad=padding,
+                       name=_prepare_name(name, "sp_convnd"), depth_mult=1)
+
+    if is_slice:
+        begin = (0, 0) + (0,) * len(out_size)
+        end = (None, None) + tuple(out_size)
+        conv = mx.sym.slice_axis(conv, axis=2, begin=begin[2], end=end[2])
+        conv = mx.sym.slice_axis(conv, axis=3, begin=begin[3], end=end[3])
+
+    # Handle original Data Format
+    result = _postprocess_convnd_output(KerasSymbol(conv), data_format)
+    return result
+
+
+@keras_mxnet_symbol
+def _dw_conv(x, kernel, strides, filter_dilation, name=None, padding_mode='valid',
+             data_format='default'):
+    if data_format is None or data_format == 'default':
+        data_format = image_data_format()
+
+    # Handle Data Format
+    x = _preprocess_convnd_input(x, data_format)
+    kernel = _preprocess_dw_convnd_kernel(kernel, data_format)
+
+    # We have already converted kernel to match MXNet required shape:
+    # (depth, input_depth, rows, cols)
+    kernel_shape = kernel.shape
+    layout_kernel = tuple(kernel_shape[2:])
+    nb_filter = kernel_shape[0]
+    depth_multiplier = kernel_shape[1]
+    # Calculate padding requirement.
+    padding, is_slice, out_size = _preprocess_padding_mode(padding_mode, x.shape,
+                                                           layout_kernel, strides,
+                                                           filter_dilation)
+
+    # Perform convolution.
+    """
+    # mathematical implementation
+    conv = _mx_dw_conv(x.symbol, nb_filter, weight=kernel.symbol, kernel=layout_kernel, stride=strides, pad=padding,
+                        name=_prepare_name(name, "convnd"), depth_mult=1)
+    """
+    # num_group trick in native conv2d, only support depth_multiplier = 1
+    if depth_multiplier != 1:
+        raise ValueError('MXNet Backend: Does not support depth multiplier not equal to 1')
+    conv = mx.sym.Convolution(data=x.symbol, name=_prepare_name(name, "convnd"),
+                              kernel=layout_kernel, num_group=nb_filter, stride=strides, pad=padding,
+                              num_filter=nb_filter, weight=kernel.symbol,
+                              dilate=filter_dilation, no_bias=True)
+
+    if is_slice:
+        begin = (0, 0) + (0,) * len(out_size)
+        end = (None, None) + tuple(out_size)
+        conv = mx.sym.slice_axis(conv, axis=2, begin=begin[2], end=end[2])
+        conv = mx.sym.slice_axis(conv, axis=3, begin=begin[3], end=end[3])
+
+    # Handle original Data Format
+    result = _postprocess_convnd_output(KerasSymbol(conv), data_format)
+    return result
 
 
 @keras_mxnet_symbol
@@ -4219,7 +4422,6 @@ def _convnd(x, kernel, strides, filter_dilation, name=None, padding_mode='valid'
     kernel_shape = kernel.shape
     layout_kernel = tuple(kernel_shape[2:])
     nb_filter = kernel_shape[0]
-
     # Calculate padding requirement.
     padding, is_slice, out_size = _preprocess_padding_mode(padding_mode, x.shape,
                                                            layout_kernel, strides,
@@ -4230,6 +4432,7 @@ def _convnd(x, kernel, strides, filter_dilation, name=None, padding_mode='valid'
                               kernel=layout_kernel, stride=strides, pad=padding,
                               num_filter=nb_filter, weight=kernel.symbol,
                               dilate=filter_dilation, no_bias=True)
+
     if is_slice:
         begin = (0, 0) + (0,) * len(out_size)
         end = (None, None) + tuple(out_size)
@@ -4370,16 +4573,27 @@ def get_model():
     engine = importlib.import_module('keras.engine.training')
 
     class Model(engine.Model):
-        """The `Model` class adds training & evaluation routines to a `Container`. This class extends
+        """The `Model` class adds training & evaluation routines to a `Network`. This class extends
         keras.engine.Model to add MXNet Module to perform training and inference with MXNet backend.
         """
+        def __init__(self, *args, **kwargs):
+            if 'name' not in kwargs:
+                prefix = self.__class__.__name__.lower()
+                name = prefix + '_' + str(get_uid(prefix))
+                kwargs['name'] = name
 
-        def __init__(self, inputs, outputs, name=None, context=None, kvstore='device', **kwargs):
-            super(Model, self).__init__(inputs, outputs, name)
-            self._num_data = len(self.inputs)
-            self._num_label = len(self.outputs) + len(self.output_names)
-            self._context = self.get_mxnet_context(context)
-            self._kvstore = kvstore
+            self.name = kwargs['name']
+
+            super(Model, self).__init__(*args, **kwargs)
+
+            if 'context' not in kwargs:
+                kwargs['context'] = None
+
+            if 'kvstore' not in kwargs:
+                kwargs['kvstore'] = 'device'
+
+            self._context = self.get_mxnet_context(kwargs['context'])
+            self._kvstore = kwargs['kvstore']
 
             self._data_names = None
             self._label_names = None
@@ -4399,19 +4613,38 @@ def get_model():
             self._weights_dirty = None
             self._module = None
 
-            # Create Module for Inference
             self.compiled = False
-            self._create_predict_module()
 
-        def compile(self, optimizer, loss, metrics=None, loss_weights=None,
+            if self.built:
+                self._num_data = len(self.inputs)
+                self._num_label = len(self.outputs) + len(self.output_names)
+                # Create Module for Inference
+                self._create_predict_module()
+            else:
+                self._num_data = None
+                self._num_label = None
+
+        def compile(self, optimizer, loss=None, metrics=None, loss_weights=None,
                     sample_weight_mode=None, **kwargs):
             super(Model, self).compile(
                 optimizer, loss, metrics, loss_weights,
                 sample_weight_mode, **kwargs)
 
+            if not self.built:
+                # Model is not compilable because
+                # it does not know its number of inputs
+                # and outputs, nor their shapes and names.
+                # We will compile after the first
+                # time the model gets called on training data.
+                return
+
             # If context is passed in kwargs
             if 'context' in kwargs:
                 self._context = self.get_mxnet_context(kwargs['context'])
+
+            if self.built:
+                self._num_data = len(self.inputs)
+                self._num_label = len(self.outputs) + len(self.output_names)
 
             # set the data and label
             self._data_names = [x.name for x in self.inputs if x]
@@ -4593,6 +4826,11 @@ def get_model():
             def predict_function(inputs):
                 # used predict only module if predict is called without compile
                 if not self.compiled:
+                    if self.built:
+                        self._num_data = len(self.inputs)
+                        self._num_label = len(self.outputs) + len(self.output_names)
+                        # Create Module for Inference
+                        self._create_predict_module()
                     self._module = self._predict_only_module
                     set_model(self)
 
@@ -4710,6 +4948,38 @@ def get_model():
             self._context = self.get_mxnet_context(gpus)
 
     return Model
+
+
+def get_sequential_model():
+    """Prepares Sequential Model class that can be used for training a Keras Sequential Model with MXNet backend.
+    Inherits and extends keras.engine.Model and keras.engine.Sequential class.
+
+    # Returns
+        MXNet Sequential Model reference
+    """
+    import importlib
+    sequential = importlib.import_module('keras.engine.sequential')
+    engine = importlib.import_module('keras.engine.training')
+
+    class Sequential(sequential.Sequential, engine.Model):
+        """Linear stack of layers. This class extends keras.engine.Sequential to add MXNet Module to perform training
+        and inference with MXNet backend.
+        """
+        def __init__(self, layers=None, *args, **kwargs):
+            if 'name' not in kwargs:
+                prefix = self.__class__.__name__.lower()
+                name = prefix + '_' + str(get_uid(prefix))
+                kwargs['name'] = name
+
+            self.name = kwargs['name']
+            engine.Model.__init__(self, *args, **kwargs)
+
+            # Add to the model any layers passed to the constructor.
+            if layers:
+                for layer in layers:
+                    self.add(layer)
+
+    return Sequential
 
 
 def get_optimizers():

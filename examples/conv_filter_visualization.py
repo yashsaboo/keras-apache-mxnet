@@ -6,11 +6,15 @@ Results example: http://i.imgur.com/4nj4KjN.jpg
 '''
 from __future__ import print_function
 
-from scipy.misc import imsave
 import numpy as np
 import time
+from keras.preprocessing.image import save_img
 from keras.applications import vgg16
 from keras import backend as K
+
+if K.backend() == 'mxnet':
+    raise RuntimeError('This example cannot run with MXNet backend.'
+                       'MXNet backend does not Gradient operator yet!')
 
 # dimensions of the generated pictures for each filter.
 img_width = 128
@@ -39,6 +43,7 @@ def deprocess_image(x):
         x = x.transpose((1, 2, 0))
     x = np.clip(x, 0, 255).astype('uint8')
     return x
+
 
 # build the VGG16 network with ImageNet weights
 model = vgg16.VGG16(weights='imagenet', include_top=False, input_shape=(img_width, img_height, 3))
@@ -132,4 +137,4 @@ for i in range(n):
                          (img_height + margin) * j: (img_height + margin) * j + img_height, :] = img
 
 # save the result to disk
-imsave('stitched_filters_%dx%d.png' % (n, n), stitched_filters)
+save_img('stitched_filters_%dx%d.png' % (n, n), stitched_filters)

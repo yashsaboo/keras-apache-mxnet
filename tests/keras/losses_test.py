@@ -139,9 +139,6 @@ def test_serializing_loss_class():
     assert deserialized.mse_fraction == 0.3
 
 
-# https://github.com/deep-learning-tools/keras/issues/25
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not fully support custom loss yet.')
 def test_serializing_model_with_loss_class(tmpdir):
     model_filename = str(tmpdir / 'custom_loss.hdf')
 
