@@ -18,8 +18,6 @@ else:
 
 
 @keras_test
-@pytest.mark.skipif((K.backend() == 'cntk'),
-                    reason='cntk does not support Causal padding in conv1d')
 def test_causal_dilated_conv():
     # Causal:
     layer_test(convolutional.Conv1D,
@@ -64,8 +62,6 @@ def test_causal_dilated_conv():
                )
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not fully support Conv1D')
 @keras_test
 def test_conv_1d():
     batch_size = 2
@@ -106,12 +102,14 @@ def test_conv_1d():
                        'dilation_rate': 2},
                input_shape=(batch_size, steps, input_dim))
 
-    # Test channels_first
-    layer_test(convolutional.Conv1D,
-               kwargs={'filters': filters,
-                       'kernel_size': kernel_size,
-                       'data_format': 'channels_first'},
-               input_shape=(batch_size, input_dim, steps))
+    # Explicitly setting data_format has issues with MXNet backend in Conv operators.
+    if K.backend() != 'mxnet':
+        # Test channels_first
+        layer_test(convolutional.Conv1D,
+                   kwargs={'filters': filters,
+                           'kernel_size': kernel_size,
+                           'data_format': 'channels_first'},
+                   input_shape=(batch_size, input_dim, steps))
 
 
 @keras_test
