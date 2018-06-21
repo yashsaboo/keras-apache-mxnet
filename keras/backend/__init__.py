@@ -23,7 +23,7 @@ else:
         _keras_base_dir = '/tmp'
     _keras_dir = os.path.join(_keras_base_dir, '.keras')
 
-# Default backend: TensorFlow.
+# Default backend: MXNet.
 _BACKEND = 'mxnet'
 
 # Attempt to read Keras config file.

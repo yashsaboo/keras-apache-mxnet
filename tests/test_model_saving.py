@@ -526,8 +526,6 @@ def test_saving_custom_activation_function():
     assert_allclose(out, out2, atol=1e-05)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support LSTM yet.')
 @keras_test
 def test_saving_model_with_long_layer_names():
     # This layer name will make the `layers_name` HDF5 attribute blow
@@ -636,8 +634,6 @@ def test_saving_recurrent_layer_with_init_state():
     os.remove(fname)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support LSTM yet.')
 @keras_test
 def test_saving_recurrent_layer_without_bias():
     vector_size = 8

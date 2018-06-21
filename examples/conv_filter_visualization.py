@@ -12,6 +12,10 @@ from keras.preprocessing.image import save_img
 from keras.applications import vgg16
 from keras import backend as K
 
+if K.backend() == 'mxnet':
+    raise RuntimeError('This example cannot run with MXNet backend.'
+                       'MXNet backend does not Gradient operator yet!')
+
 # dimensions of the generated pictures for each filter.
 img_width = 128
 img_height = 128

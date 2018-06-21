@@ -1,12 +1,10 @@
 '''Trains a ResNet on the ImageNet/CIFAR10 dataset.
 Credit:
 Script modified from examples/cifar10_resnet.py
-
 Reference:
 ResNet v1
 [a] Deep Residual Learning for Image Recognition
 https://arxiv.org/pdf/1512.03385.pdf
-
 ResNet v2
 [b] Identity Mappings in Deep Residual Networks
 https://arxiv.org/pdf/1603.05027.pdf

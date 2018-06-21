@@ -15,6 +15,7 @@ Time per epoch: 3s on CPU (core i7).
 '''
 from __future__ import print_function
 
+from keras import backend as K
 from keras.models import Sequential, Model
 from keras.layers.embeddings import Embedding
 from keras.layers import Input, Activation, Dense, Permute, Dropout

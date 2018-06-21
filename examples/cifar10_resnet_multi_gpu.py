@@ -1,4 +1,6 @@
-"""Trains a ResNet on the CIFAR10 dataset.
+"""Trains a ResNet on the CIFAR10 dataset with multi-GPU.
+
+Modified from examples/cifar10_resnet.py
 
 ResNet v1
 [a] Deep Residual Learning for Image Recognition
@@ -26,13 +28,15 @@ import os
 from keras.utils import multi_gpu_model
 
 # Training parameters
-batch_size = 32  # orig paper trained all networks with batch_size=128
+num_gpus = 4
+batch_size = 32 * num_gpus  # orig paper trained all networks with batch_size=128
 epochs = 200
-data_augmentation = True
+data_augmentation = False
+data_normalization = False
 num_classes = 10
 
 # Subtracting pixel mean improves accuracy
-subtract_pixel_mean = True
+subtract_pixel_mean = False
 
 # Model parameter
 # ----------------------------------------------------------------------------
@@ -48,7 +52,8 @@ subtract_pixel_mean = True
 # ResNet164 |27(18)| -----     | 94.07     | -----     | 94.54     | ---(---)
 # ResNet1001| (111)| -----     | 92.39     | -----     | 95.08+-.14| ---(---)
 # ---------------------------------------------------------------------------
-n = 3
+# use ResNet56
+n = 9
 
 # Model version
 # Orig paper: version = 1 (ResNet v1), Improved ResNet: version = 2 (ResNet v2)
@@ -70,8 +75,9 @@ model_type = 'ResNet%dv%d' % (depth, version)
 input_shape = x_train.shape[1:]
 
 # Normalize data.
-x_train = x_train.astype('float32') / 255
-x_test = x_test.astype('float32') / 255
+if data_normalization:
+    x_train = x_train.astype('float32') / 255
+    x_test = x_test.astype('float32') / 255
 
 # If subtract pixel mean is enabled
 if subtract_pixel_mean:
@@ -335,7 +341,7 @@ else:
     model = resnet_v1(input_shape=input_shape, depth=depth)
 
 # use 4 gpus to train the model
-model = multi_gpu_model(model, gpus=4)
+model = multi_gpu_model(model, gpus=num_gpus)
 model.compile(loss='categorical_crossentropy',
               optimizer=Adam(lr=lr_schedule(0)),
               metrics=['accuracy'])

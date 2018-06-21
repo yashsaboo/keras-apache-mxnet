@@ -633,6 +633,8 @@ def test_TensorBoard_histogram_freq_must_have_validation_data(tmpdir):
 
 
 @keras_test
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support Lambda yet.')
 def test_TensorBoard_multi_input_output(tmpdir):
     np.random.seed(np.random.randint(1, 1e7))
     filepath = str(tmpdir / 'logs')

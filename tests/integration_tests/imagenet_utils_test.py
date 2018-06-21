@@ -5,6 +5,7 @@ from numpy.testing import assert_allclose
 from keras.applications import imagenet_utils as utils
 from keras.models import Model
 from keras.layers import Input, Lambda
+from keras import backend as K
 
 
 def test_preprocess_input():
@@ -55,6 +56,8 @@ def test_preprocess_input():
     assert xint.astype('float').max() != xint2.max()
 
 
+@pytest.mark.skipif(K.backend() == 'mxnet',
+                    reason='MXNet backend does not support Lambda')
 def test_preprocess_input_symbolic():
     # Test image batch
     x = np.random.uniform(0, 255, (2, 10, 10, 3))
@@ -106,6 +109,118 @@ def test_decode_predictions():
     # the numbers of columns and ImageNet classes are not identical.
     with pytest.raises(ValueError):
         utils.decode_predictions(np.ones((2, 100)))
+
+
+def test_obtain_input_shape():
+    # input_shape and default_size are not identical.
+    with pytest.raises(ValueError):
+        utils._obtain_input_shape(
+            input_shape=(224, 224, 3),
+            default_size=299,
+            min_size=139,
+            data_format='channels_last',
+            require_flatten=True,
+            weights='imagenet')
+
+    # Test invalid use cases
+    for data_format in ['channels_last', 'channels_first']:
+
+        # test warning
+        shape = (139, 139)
+        input_shape = shape + (99,) if data_format == 'channels_last' else (99,) + shape
+        with pytest.warns(UserWarning):
+            utils._obtain_input_shape(
+                input_shape=input_shape,
+                default_size=None,
+                min_size=139,
+                data_format=data_format,
+                require_flatten=False,
+                weights='fake_weights')
+
+        # input_shape is smaller than min_size.
+        shape = (100, 100)
+        input_shape = shape + (3,) if data_format == 'channels_last' else (3,) + shape
+        with pytest.raises(ValueError):
+            utils._obtain_input_shape(
+                input_shape=input_shape,
+                default_size=None,
+                min_size=139,
+                data_format=data_format,
+                require_flatten=False)
+
+        # shape is 1D.
+        shape = (100,)
+        input_shape = shape + (3,) if data_format == 'channels_last' else (3,) + shape
+        with pytest.raises(ValueError):
+            utils._obtain_input_shape(
+                input_shape=input_shape,
+                default_size=None,
+                min_size=139,
+                data_format=data_format,
+                require_flatten=False)
+
+        # the number of channels is 5 not 3.
+        shape = (100, 100)
+        input_shape = shape + (5,) if data_format == 'channels_last' else (5,) + shape
+        with pytest.raises(ValueError):
+            utils._obtain_input_shape(
+                input_shape=input_shape,
+                default_size=None,
+                min_size=139,
+                data_format=data_format,
+                require_flatten=False)
+
+        # require_flatten=True with dynamic input shape.
+        with pytest.raises(ValueError):
+            utils._obtain_input_shape(
+                input_shape=None,
+                default_size=None,
+                min_size=139,
+                data_format='channels_first',
+                require_flatten=True)
+
+    # test include top
+    assert utils._obtain_input_shape(
+        input_shape=(3, 200, 200),
+        default_size=None,
+        min_size=139,
+        data_format='channels_first',
+        require_flatten=True) == (3, 200, 200)
+
+    assert utils._obtain_input_shape(
+        input_shape=None,
+        default_size=None,
+        min_size=139,
+        data_format='channels_last',
+        require_flatten=False) == (None, None, 3)
+
+    assert utils._obtain_input_shape(
+        input_shape=None,
+        default_size=None,
+        min_size=139,
+        data_format='channels_first',
+        require_flatten=False) == (3, None, None)
+
+    assert utils._obtain_input_shape(
+        input_shape=None,
+        default_size=None,
+        min_size=139,
+        data_format='channels_last',
+        require_flatten=False) == (None, None, 3)
+
+    assert utils._obtain_input_shape(
+        input_shape=(150, 150, 3),
+        default_size=None,
+        min_size=139,
+        data_format='channels_last',
+        require_flatten=False) == (150, 150, 3)
+
+    assert utils._obtain_input_shape(
+        input_shape=(3, None, None),
+        default_size=None,
+        min_size=139,
+        data_format='channels_first',
+        require_flatten=False) == (3, None, None)
 
 
 if __name__ == '__main__':
