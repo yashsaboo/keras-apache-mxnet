@@ -37,7 +37,6 @@ setup(name='Keras',
                         'six>=1.9.0',
                         'h5py>=2.7.1',
                         'pyyaml',
-                        'h5py',
                         'keras_applications==1.0.4',
                         'keras_preprocessing==1.0.2'],
       extras_require={

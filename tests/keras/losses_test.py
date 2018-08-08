@@ -59,8 +59,6 @@ def test_objective_shapes_2d():
         assert K.eval(objective_output).shape == (6,)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support `sparse` yet.')
 def test_cce_one_hot():
     y_a = K.variable(np.random.randint(0, 7, (5, 6)))
     y_b = K.variable(np.random.random((5, 6, 7)))
@@ -82,8 +80,6 @@ def test_categorical_hinge():
     assert np.isclose(expected_loss, np.mean(loss))
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support `sparse` yet.')
 def test_sparse_categorical_crossentropy():
     y_pred = K.variable(np.array([[0.3, 0.6, 0.1],
                                   [0.1, 0.2, 0.7]]))
@@ -93,8 +89,6 @@ def test_sparse_categorical_crossentropy():
     assert np.isclose(expected_loss, np.mean(loss))
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support `sparse` yet.')
 def test_sparse_categorical_crossentropy_4d():
     y_pred = K.variable(np.array([[[[0.7, 0.1, 0.2],
                                     [0.0, 0.3, 0.7],

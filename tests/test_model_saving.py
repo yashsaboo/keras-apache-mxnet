@@ -821,5 +821,169 @@ def test_preprocess_weights_for_loading_gru_incompatible():
                           'GRU(reset_after=True) is not compatible with GRU(reset_after=False)')
 
 
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+@keras_test
+def test_sequential_lstm_mxnet_model_saving():
+    max_features = 1000
+    maxlen = 80
+    batch_size = 32
+
+    model = Sequential()
+    model.add(Embedding(max_features, 128, input_length=maxlen))
+    model.add(LSTM(128, unroll=True))
+
+    model.compile(loss='binary_crossentropy',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    # Generate random data
+    x = np.random.random((1000, maxlen))
+    y = np.random.random((1000, 128))
+    print("X shape - ", x.shape)
+    print("Y shape - ", y.shape)
+    model.fit(x, y, batch_size=batch_size, epochs=2)
+
+    save_mxnet_model(model, prefix='test_lstm', epoch=0)
+
+    # Import with MXNet and try to perform inference
+    import mxnet as mx
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test_lstm', epoch=0)
+    mod = mx.mod.Module(symbol=sym, data_names=['/embedding_1_input1'], context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[('/embedding_1_input1', (1, 80))], label_shapes=mod._label_shapes)
+    mod.set_params(arg_params, aux_params, allow_missing=True)
+    data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 80))], label=None, batch_size=1)
+    mod.predict(data_iter)
+
+    os.remove('test_lstm-symbol.json')
+    os.remove('test_lstm-0000.params')
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+@keras_test
+def test_sequential_mxnet_model_saving():
+    model = Sequential()
+    model.add(Dense(2, input_shape=(3,)))
+    model.add(RepeatVector(3))
+    model.add(TimeDistributed(Dense(3)))
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.RMSprop(lr=0.0001),
+                  metrics=[metrics.categorical_accuracy],
+                  sample_weight_mode='temporal')
+    x = np.random.random((1, 3))
+    y = np.random.random((1, 3, 3))
+    model.train_on_batch(x, y)
+
+    data_names, _ = save_mxnet_model(model, prefix='test', epoch=0)
+
+    # Import with MXNet and try to perform inference
+    import mxnet as mx
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test', epoch=0)
+    mod = mx.mod.Module(symbol=sym, data_names=data_names, context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[(data_names[0], (1, 3))], label_shapes=mod._label_shapes)
+    mod.set_params(arg_params, aux_params, allow_missing=True)
+    data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 3))], label=None, batch_size=1)
+    mod.predict(data_iter)
+
+    os.remove('test-symbol.json')
+    os.remove('test-0000.params')
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+@keras_test
+def test_sequential_mxnet_model_saving_no_compile():
+    model = Sequential()
+    model.add(Dense(2, input_shape=(3,)))
+    model.add(RepeatVector(3))
+    model.add(TimeDistributed(Dense(3)))
+    with pytest.raises(AssertionError):
+        save_mxnet_model(model, prefix='test', epoch=0)
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+@keras_test
+def test_sequential_get_mxnet_model_info():
+    model = Sequential()
+    model.add(Dense(2, input_shape=(3,)))
+    model.add(RepeatVector(3))
+    model.add(TimeDistributed(Dense(3)))
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.RMSprop(lr=0.0001),
+                  metrics=[metrics.categorical_accuracy],
+                  sample_weight_mode='temporal')
+    x = np.random.random((1, 3))
+    y = np.random.random((1, 3, 3))
+    model.train_on_batch(x, y)
+
+    data_names, data_shapes = K.get_mxnet_model_info(model)
+
+    data_names_saved_model, data_shapes_saved_model = save_mxnet_model(model, prefix='test', epoch=0)
+
+    # Only one input
+    assert len(data_names) == 1
+    # Example data_names = ['/dense_8_input1']
+    assert data_names[0].startswith('/dense_')
+
+    # Example data_shape = [DataDesc[/dense_8_input1,(1, 3),float32,NCHW]]
+    assert len(data_shapes) == 1
+    assert data_shapes[0].name == data_names[0]
+    # In this example, we are passing x as input with shape (1,3)
+    assert data_shapes[0].shape == (1, 3)
+
+    # Compare with returned values from Save MXNet Model API. They should be the same.
+    assert len(data_names) == len(data_names_saved_model)
+    assert data_names[0] == data_names_saved_model[0]
+
+    assert len(data_shapes) == len(data_shapes_saved_model)
+    assert data_shapes[0].name == data_shapes_saved_model[0].name
+    assert data_shapes[0].shape == data_shapes_saved_model[0].shape
+
+    os.remove('test-symbol.json')
+    os.remove('test-0000.params')
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+@keras_test
+def test_sequential_get_mxnet_model_info_no_compile():
+    model = Sequential()
+    model.add(Dense(2, input_shape=(3,)))
+    model.add(RepeatVector(3))
+    model.add(TimeDistributed(Dense(3)))
+    with pytest.raises(AssertionError):
+        K.get_mxnet_model_info(model)
+
+
+@keras_test
+def test_functional_model_get_mxnet_model_info():
+    inputs = Input(shape=(3,))
+    x = Dense(2)(inputs)
+    outputs = Dense(3)(x)
+
+    model = Model(inputs, outputs)
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.Adam(),
+                  metrics=[metrics.categorical_accuracy])
+    x = np.random.random((1, 3))
+    y = np.random.random((1, 3))
+    model.train_on_batch(x, y)
+
+    data_names, data_shapes = K.get_mxnet_model_info(model)
+
+    # Only one input
+    assert len(data_names) == 1
+    # Example data_names = ['/dense_8_input1']
+    assert data_names[0].startswith('/input_')
+
+    # Example data_shape = [DataDesc[/dense_8_input1,(1, 3),float32,NCHW]]
+    assert len(data_shapes) == 1
+    assert data_shapes[0].name == data_names[0]
+    # In this example, we are passing x as input with shape (1,3)
+    assert data_shapes[0].shape == (1, 3)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

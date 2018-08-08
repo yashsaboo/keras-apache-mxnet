@@ -1600,12 +1600,20 @@ def clip(x, min_value, max_value):
 def equal(x, y):
     """Element-wise equality between two tensors.
 
+    For all element-wise comparison operators:
+    use broadcasting to do element-wise comparison if both x & y are MXNet symbol
+    use native comparison operators for scalar
+    use numpy operators if both x & y are numbers or numpy arrays
+
     # Arguments
         x: Tensor or variable.
         y: Tensor or variable.
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1614,12 +1622,16 @@ def equal(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x == y, dtype='uint8'))
     if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
-        return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_equal(lhs=x, rhs=y), dtype='uint8'))
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_equal(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x == y, dtype='uint8'))
     else:
-        raise TypeError('MXNet Backend: The inputs are not valid for equal operation.')
+        try:
+            out = np.equal(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for equal operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -1632,6 +1644,9 @@ def not_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1640,12 +1655,16 @@ def not_equal(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x != y, dtype='uint8'))
     if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
-        return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_not_equal(lhs=x, rhs=y), dtype='uint8'))
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_not_equal(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x != y, dtype='uint8'))
     else:
-        raise TypeError('MXNet Backend: The inputs are not valid for not_equal operation.')
+        try:
+            out = np.not_equal(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for not_equal operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -1658,6 +1677,9 @@ def greater(x, y):
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1666,12 +1688,16 @@ def greater(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x > y, dtype='uint8'))
     if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
-        return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_greater(lhs=x, rhs=y), dtype='uint8'))
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_greater(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x > y, dtype='uint8'))
     else:
-        raise TypeError('MXNet Backend: The inputs are not valid for greater operation.')
+        try:
+            out = np.greater(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for greater operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -1684,6 +1710,9 @@ def greater_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1692,12 +1721,16 @@ def greater_equal(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x >= y, dtype='uint8'))
     if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
-        return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_greater_equal(lhs=x, rhs=y), dtype='uint8'))
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_greater_equal(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x >= y, dtype='uint8'))
     else:
-        raise TypeError('MXNet Backend: The inputs are not valid for greater_equal operation.')
+        try:
+            out = np.greater_equal(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for greater_equal operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -1710,6 +1743,9 @@ def less(x, y):
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1718,9 +1754,16 @@ def less(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x < y, dtype='uint8'))
-    return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_lesser(lhs=x, rhs=y), dtype='uint8'))
+    if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_lesser(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x < y, dtype='uint8'))
+    else:
+        try:
+            out = np.less(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for less operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -1733,6 +1776,9 @@ def less_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    # Raise
+        TypeError: if inputs are not valid.
     """
     scalar = False
     if isinstance(x, KerasSymbol):
@@ -1741,9 +1787,16 @@ def less_equal(x, y):
     if isinstance(y, KerasSymbol):
         y = y.symbol
         scalar = True
-    if scalar:
-        return KerasSymbol(mx.sym.Cast(x <= y, dtype='uint8'))
-    return KerasSymbol(mx.sym.Cast(mx.sym.broadcast_lesser_equal(lhs=x, rhs=y), dtype='uint8'))
+    if isinstance(x, mx.sym.Symbol) and isinstance(y, mx.sym.Symbol):
+        out = KerasSymbol(mx.sym.Cast(mx.sym.broadcast_lesser_equal(lhs=x, rhs=y), dtype='uint8'))
+    elif scalar:
+        out = KerasSymbol(mx.sym.Cast(x <= y, dtype='uint8'))
+    else:
+        try:
+            out = np.less(x, y)
+        except:
+            raise TypeError('MXNet Backend: The inputs are not valid for less_equal operation.')
+    return out
 
 
 @keras_mxnet_symbol
@@ -2864,7 +2917,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
     # Returns
         Output tensor.
     """
-    output_dimensions = list(range(len(int_shape(output))))
+    output_dimensions = list(range(ndim(output)))
     if axis != -1 and axis not in output_dimensions:
         raise ValueError(
             '{}{}{}'.format(
@@ -2873,7 +2926,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
                 'which has {} dimensions.'.format(len(int_shape(output)))))
 
     mx_output = output.symbol
-    # scale predictions so that the class probas of each sample sum to 1
+    # scale predictions so that the class probabilities of each sample sum to 1
     if from_logits:
         mx_output = mx.sym.softmax(mx_output, axis=axis)
     else:
@@ -2888,6 +2941,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
     return KerasSymbol(mx_output)
 
 
+@keras_mxnet_symbol
 def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     """Categorical crossentropy with integer targets.
 
@@ -2902,7 +2956,29 @@ def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     # Returns
         Output tensor.
     """
-    raise NotImplementedError('MXNet Backend: Sparse operations are not supported yet.')
+    output_dimensions = list(range(ndim(output)))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(int_shape(output)))))
+
+    mx_output = output.symbol
+    # scale predictions so that the class probabilities of each sample sum to 1
+    if from_logits:
+        mx_output = mx.sym.softmax(mx_output, axis=axis)
+    else:
+        mx_output = mx.sym.broadcast_div(mx_output, mx.sym.sum(mx_output,
+                                                               axis=axis,
+                                                               keepdims=True))
+    # clip to prevent NaN's and Inf's
+    mx_output = mx.sym.clip(mx_output, a_min=epsilon(), a_max=1.0 - epsilon())
+    # For this operation, the probability of a given label is considered exclusive.
+    mx_output = mx.sym.pick(mx_output, target.symbol, axis=axis, keepdims=True)
+    mx_output = - mx.sym.log(mx_output, axis=axis)
+    # reshape to input's shape
+    return reshape(KerasSymbol(mx_output), target.shape)
 
 
 @keras_mxnet_symbol
@@ -3076,6 +3152,10 @@ def conv1d(x, kernel, strides=1, padding='valid',
         # X original shape (batch, length, input_dim)
         # Add a dimension to X to Make it (batch, length, 1, input_dim)
         x = expand_dims(x, axis=2)
+        # Add dimension to kernel
+        # for channels last: kernel_shape = kernel_size + (input_dim, filters)
+        # it will become: (kernel_size, 1, input_dim, filters)
+        kernel = expand_dims(kernel, axis=1)
         # update x._keras_shape
         if shape is not None:
             x._keras_shape = (shape[0], shape[1], 1, shape[2])
@@ -3083,15 +3163,16 @@ def conv1d(x, kernel, strides=1, padding='valid',
         # X original shape (batch, input_dim, length)
         # Add a dimension to X to make it (batch, input_dim, length, 1)
         x = expand_dims(x, axis=3)
+        # Add dimension to kernel
+        # for channels first: kernel_shape = (filters, input_dim) + kernel_size
+        # it will become: (filters, input_dim, kernel_size, 1)
+        kernel = expand_dims(kernel, axis=3)
         if shape is not None:
             x._keras_shape = (shape[0], shape[1], shape[2], 1)
 
     # update dilation rate, strides
     dilation_rate = (dilation_rate, 1)
     strides = (strides, 1)
-    # add dim to kernel (always same format independently of data_format)
-    # i.e. (rows, 1, input_depth, depth)
-    kernel = expand_dims(kernel, axis=1)
 
     output = _convnd(x, kernel, name='conv1d', strides=strides, filter_dilation=dilation_rate,
                      padding_mode=padding, data_format=data_format)
@@ -4560,6 +4641,40 @@ def _poolnd(x, name, pool_size, strides, padding_mode='valid',
     # Handle original Data Format
     result = _postprocess_convnd_output(KerasSymbol(mx_out), data_format)
     return result
+
+
+def get_mxnet_model_info(model):
+    """Get native MXNet model details for given Keras Model.
+    `data_names` and `data_shapes` are returned that can be used to bind the model in MXNet Module.
+    `data_names` and `data_shapes` represents input layer name and shape.
+    You can change the first dimension of data_shapes to match batch size for inference.
+
+    Note: You should use `save_mxnet_model()` API for saving the model in native MXNet model format.
+
+    # Arguments
+        model: Keras model instance from which to extract MXNet model details.
+
+    # Returns
+        data_names, data_shapes
+
+    # Raises
+        AssertionError if Model is not compiled.
+    """
+    assert model is not None, 'MXNet Backend: Invalid state. Model cannot be None.'
+
+    # Underlying MXNet model for Inference in native MXNet engine.
+    symbol = model._pred_mxnet_symbol
+    module = model._module
+
+    assert symbol is not None, 'MXNet Backend: Invalid state. MXNet Symbol cannot be None.'
+    assert module is not None, 'MXNet Backend: Invalid state. MXNet Module cannot be None.'
+
+    # Get Module Input data_names and data_shapes.
+    # This info will be useful for users to easily bind the exported model in MXNet.
+    pred_module = module._buckets['pred']
+    data_names = pred_module.data_names
+    data_shapes = pred_module.data_shapes
+    return data_names, data_shapes
 
 
 def get_model():
