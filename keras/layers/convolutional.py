@@ -318,7 +318,7 @@ class Conv1D(_Conv):
                  kernel_size,
                  strides=1,
                  padding='valid',
-                 data_format='channels_last',
+                 data_format=None,
                  dilation_rate=1,
                  activation=None,
                  use_bias=True,
@@ -331,7 +331,7 @@ class Conv1D(_Conv):
                  bias_constraint=None,
                  **kwargs):
         if padding == 'causal':
-            if data_format != 'channels_last':
+            if K.image_data_format() != 'channels_last':
                 raise ValueError('When using causal padding in `Conv1D`, '
                                  '`data_format` must be "channels_last" '
                                  '(temporal data).')

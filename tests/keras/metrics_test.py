@@ -57,8 +57,6 @@ def test_metrics():
         assert K.eval(output).shape == (6,)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support `sparse` yet.')
 def test_sparse_metrics():
     for metric in all_sparse_metrics:
         y_a = K.variable(np.random.randint(0, 7, (6,)), dtype=K.floatx())

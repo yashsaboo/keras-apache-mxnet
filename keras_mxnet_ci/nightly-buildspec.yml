@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      echo "Checking out master branch";
+      git fetch;
+      git checkout master;
+      echo "Installing MXNet";
+      apt-get update;
+      pip install --upgrade pip;
+      pip install mxnet-mkl;
+      echo "Installing Tensorflow";
+      pip install tensorflow;
+      echo "Installing Theano";
+      pip install theano;
+      pip install pillow;
+      echo "Installing Keras from source";
+      pip install -e .[visualize,tests];
+      pip uninstall --yes keras;
+
+
+  build:
+    commands:
+      echo "Running Keras Unit Tests and Integration Tests for all the backends";
+      py.test tests/;
+      echo "Running PEP tests";
+      py.test --pep8 -m pep8 -n0;

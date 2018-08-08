@@ -20,6 +20,8 @@ from .utils.generic_utils import Progbar
 from . import backend as K
 from .engine.training_utils import standardize_input_data
 
+from .engine.saving import save_mxnet_model
+
 try:
     import requests
 except ImportError:
@@ -428,8 +430,9 @@ class ModelCheckpoint(Callback):
             if self.save_best_only:
                 current = logs.get(self.monitor)
                 if current is None:
-                    warnings.warn('Can save best model only with %s available, '
-                                  'skipping.' % (self.monitor), RuntimeWarning)
+                    warnings.warn('Unable to calculate the metric for determining the best model. '
+                                  'Can save best model only with %s available, '
+                                  'skipping.' % self.monitor, RuntimeWarning)
                 else:
                     if self.monitor_op(current, self.best):
                         if self.verbose > 0:
@@ -1232,3 +1235,72 @@ class LambdaCallback(Callback):
             self.on_train_end = on_train_end
         else:
             self.on_train_end = lambda logs: None
+
+
+class MXNetModelCheckpoint(ModelCheckpoint):
+    """Save the MXNet Model after every epoch. Saves both params and symbol file. Saves in the current directory.
+
+       If save_best_only is True, saves the MXNet model in the format '<prefix>-symbol.json' and '<prefix>-0000.params'.
+       i.e., uses 0000 as placeholder for the epoch. You will have only one best model at the end of training.
+
+       If save_best_only is False, i.e., you want to save the MXNet model after each epoch, this callback saves the Model
+       in the format '<prefix>-symbol.json' and '<prefix>-<epoch>.params'. Example: If you are running the training job
+       for 2 epochs, you will have one symbol file - '<prefix>-symbol.json' and 2 params file, one each for the 2 epochs,
+       '<prefix>-0000.params' and '<prefix>-0001.params'
+
+       # Arguments
+           prefix: Prefix name of the saved MXNet Model (symbol and params) files.
+                   Model will be saved as '<prefix>-symbol.json' and '<prefix>-<epoch>.params'.
+           monitor: quantity to monitor. Example: 'val_acc', 'val_loss'.
+           verbose: verbosity mode, 0 or 1.
+           save_best_only: if `save_best_only=True`,
+               the latest best model according to
+               the quantity monitored will not be overwritten.
+           mode: one of {auto, min, max}.
+               If `save_best_only=True`, the decision
+               to overwrite the current save file is made
+               based on either the maximization or the
+               minimization of the monitored quantity. For `val_acc`,
+               this should be `max`, for `val_loss` this should
+               be `min`, etc. In `auto` mode, the direction is
+               automatically inferred from the name of the monitored quantity.
+           period: Interval (number of epochs) between checkpoints.
+       """
+    def __init__(self, prefix, monitor='val_loss', verbose=0,
+                 save_best_only=False,
+                 mode='auto', period=1):
+        super(MXNetModelCheckpoint, self).__init__(filepath=None, monitor=monitor, verbose=verbose,
+                                                   save_best_only=save_best_only, save_weights_only=False,
+                                                   mode=mode, period=period)
+        self.prefix = prefix
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        self.epochs_since_last_save += 1
+        if self.epochs_since_last_save >= self.period:
+            self.epochs_since_last_save = 0
+            if self.save_best_only:
+                # We use epoch=0 for saving the best model. This will replace previous best model.
+                current = logs.get(self.monitor)
+                if current is None:
+                    warnings.warn('Can save best model only with %s available, '
+                                  'skipping.' % self.monitor, RuntimeWarning)
+                else:
+                    if self.monitor_op(current, self.best):
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                  ' saving the MXNet model.'
+                                  % (epoch + 1, self.monitor, self.best,
+                                     current))
+                        self.best = current
+                        save_mxnet_model(self.model, prefix=self.prefix)
+                    else:
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s did not improve from %0.5f' %
+                                  (epoch + 1, self.monitor, self.best))
+            else:
+                # User want to save model after each epoch. Hence, using the `epoch`.
+                if self.verbose > 0:
+                    print('\nEpoch %05d: saving the MXNet model.' % (epoch + 1))
+
+                save_mxnet_model(self.model, prefix=self.prefix, epoch=epoch)

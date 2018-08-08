@@ -111,7 +111,16 @@ class BatchNormalization(Layer):
                                          regularizer=self.gamma_regularizer,
                                          constraint=self.gamma_constraint)
         else:
-            self.gamma = None
+            # temporary workaround, mxnet backend does not take gamma symbol as None, initialize as ones
+            # issue tracked at: https://github.com/apache/incubator-mxnet/issues/11774
+            # unit tests at tests/keras/layers/normalization_test.py:test_batchnorm_convnet_no_center_no_scale
+            if K.backend() == 'mxnet':
+                self.gamma = self.add_weight(shape=shape,
+                                             name='gamma',
+                                             initializer=initializers.get('ones'),
+                                             trainable=True)
+            else:
+                self.gamma = None
         if self.center:
             self.beta = self.add_weight(shape=shape,
                                         name='beta',
@@ -119,7 +128,17 @@ class BatchNormalization(Layer):
                                         regularizer=self.beta_regularizer,
                                         constraint=self.beta_constraint)
         else:
-            self.beta = None
+            # temporary workaround, mxnet backend does not take beta symbol as None, initialize as zeros
+            # and set it as not trainable
+            # issue tracked at: https://github.com/apache/incubator-mxnet/issues/11774
+            # unit tests at tests/keras/layers/normalization_test.py:test_batchnorm_convnet_no_center_no_scale
+            if K.backend() == 'mxnet':
+                self.beta = self.add_weight(shape=shape,
+                                            name='beta',
+                                            initializer=initializers.get('zeros'),
+                                            trainable=False)
+            else:
+                self.beta = None
         self.moving_mean = self.add_weight(
             shape=shape,
             name='moving_mean',

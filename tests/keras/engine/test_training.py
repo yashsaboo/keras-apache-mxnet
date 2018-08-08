@@ -1400,12 +1400,8 @@ def test_model_with_crossentropy_losses_channels_first():
         simple_model.compile(optimizer='rmsprop', loss=loss)
         return simple_model
 
-    # MXNet backend does not support Sparse Categorical Crossentropy yet.
-    if K.backend() == 'mxnet':
-        losses_to_test = ['categorical_crossentropy', 'binary_crossentropy']
-    else:
-        losses_to_test = ['sparse_categorical_crossentropy',
-                          'categorical_crossentropy', 'binary_crossentropy']
+    losses_to_test = ['sparse_categorical_crossentropy',
+                      'categorical_crossentropy', 'binary_crossentropy']
 
     data_channels_first = np.array([[[[8., 7.1, 0.], [4.5, 2.6, 0.55],
                                       [0.9, 4.2, 11.2]]]], dtype=np.float32)

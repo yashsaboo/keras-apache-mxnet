@@ -20,6 +20,8 @@ else:
 @keras_test
 def test_causal_dilated_conv():
     # Causal:
+    # specify to use channels_last data format,
+    # as default data format for Conv1D is None now
     layer_test(convolutional.Conv1D,
                input_data=np.reshape(np.arange(4, dtype='float32'), (1, 4, 1)),
                kwargs={
@@ -29,6 +31,7 @@ def test_causal_dilated_conv():
                    'padding': 'causal',
                    'kernel_initializer': 'ones',
                    'use_bias': False,
+                   'data_format': 'channels_last'
                },
                expected_output=[[[0], [1], [3], [5]]]
                )
@@ -43,6 +46,7 @@ def test_causal_dilated_conv():
                    'padding': 'valid',
                    'kernel_initializer': 'ones',
                    'use_bias': False,
+                   'data_format': 'channels_last'
                },
                expected_output=[[[1], [3], [5]]]
                )
@@ -57,6 +61,7 @@ def test_causal_dilated_conv():
                    'padding': 'causal',
                    'kernel_initializer': 'ones',
                    'use_bias': False,
+                   'data_format': 'channels_last'
                },
                expected_output=np.float32([[[0], [1], [2], [4], [6], [9], [12], [15], [18], [21]]])
                )
@@ -69,10 +74,21 @@ def test_conv_1d():
     input_dim = 2
     kernel_size = 3
     filters = 3
-    paddings = _convolution_paddings + ['causal'] if K.backend() != 'theano' else _convolution_paddings
+
+    # Add causal padding for testing
+    paddings = ['causal'] + _convolution_paddings if K.backend() != 'theano' else _convolution_paddings
 
     for padding in paddings:
         for strides in [1, 2]:
+            if K.image_data_format() == 'channels_first':
+                if padding == 'causal':
+                    # don't test causal with channels_first data as specified in convolutional.py:
+                    # When using causal padding in `Conv1D`,
+                    # `data_format` must be "channels_last" (temporal data).
+                    continue
+                input_shape = (batch_size, input_dim, steps)
+            else:
+                input_shape = (batch_size, steps, input_dim)
             if padding == 'same' and strides != 1:
                 continue
             layer_test(convolutional.Conv1D,
@@ -80,7 +96,7 @@ def test_conv_1d():
                                'kernel_size': kernel_size,
                                'padding': padding,
                                'strides': strides},
-                       input_shape=(batch_size, steps, input_dim))
+                       input_shape=input_shape)
 
             layer_test(convolutional.Conv1D,
                        kwargs={'filters': filters,
@@ -92,7 +108,7 @@ def test_conv_1d():
                                'kernel_constraint': 'max_norm',
                                'bias_constraint': 'max_norm',
                                'strides': strides},
-                       input_shape=(batch_size, steps, input_dim))
+                       input_shape=input_shape)
 
     # Test dilation
     layer_test(convolutional.Conv1D,
@@ -100,16 +116,14 @@ def test_conv_1d():
                        'kernel_size': kernel_size,
                        'padding': padding,
                        'dilation_rate': 2},
-               input_shape=(batch_size, steps, input_dim))
+               input_shape=input_shape)
 
-    # Explicitly setting data_format has issues with MXNet backend in Conv operators.
-    if K.backend() != 'mxnet':
-        # Test channels_first
-        layer_test(convolutional.Conv1D,
-                   kwargs={'filters': filters,
-                           'kernel_size': kernel_size,
-                           'data_format': 'channels_first'},
-                   input_shape=(batch_size, input_dim, steps))
+    # Test channels_first
+    layer_test(convolutional.Conv1D,
+               kwargs={'filters': filters,
+                       'kernel_size': kernel_size,
+                       'data_format': 'channels_first'},
+               input_shape=(batch_size, input_dim, steps))
 
 
 @keras_test
