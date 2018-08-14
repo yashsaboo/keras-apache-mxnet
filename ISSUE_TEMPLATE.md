@@ -5,6 +5,8 @@ Thank you!
 - [ ] Check that you are up-to-date with the master branch of Keras. You can update with:
 pip install git+git://github.com/awslabs/keras-apache-mxnet.git --upgrade --no-deps
 
+- [ ] If running on MXNet, check that you are up-to-date with the latest version. The installation
+instructions can be found [here](http://mxnet.incubator.apache.org/install/index.html?platform=Linux&language=Python&processor=CPU)
 - [ ] If running on TensorFlow, check that you are up-to-date with the latest version. The installation instructions can be found [here](https://www.tensorflow.org/get_started/os_setup).
 
 - [ ] If running on Theano, check that you are up-to-date with the master branch of Theano. You can update with:

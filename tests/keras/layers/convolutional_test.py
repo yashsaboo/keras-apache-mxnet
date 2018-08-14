@@ -212,6 +212,9 @@ def test_convolution_2d():
                                                  batch_input_shape=(None, None, 5, None))])
 
 
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support Conv2D Transpose yet.')
+@keras_test
 def test_conv2d_transpose():
     num_samples = 2
     filters = 2
@@ -220,23 +223,19 @@ def test_conv2d_transpose():
     num_col = 6
 
     for padding in _convolution_paddings:
-        for out_padding in [None, (0, 0), (1, 1)]:
-            for strides in [(1, 1), (2, 2)]:
-                if padding == 'same' and strides != (1, 1):
-                    continue
-                if strides == (1, 1) and out_padding == (1, 1):
-                    continue
-                layer_test(convolutional.Conv2DTranspose,
-                           kwargs={'filters': filters,
-                                   'kernel_size': 3,
-                                   'padding': padding,
-                                   'output_padding': out_padding,
-                                   'strides': strides,
-                                   'data_format': 'channels_last'},
-                           input_shape=(num_samples, num_row, num_col, stack_size),
-                           fixed_batch_size=True)
+        for strides in [(1, 1), (2, 2)]:
+            if padding == 'same' and strides != (1, 1):
+                continue
+            layer_test(convolutional.Deconvolution2D,
+                       kwargs={'filters': filters,
+                               'kernel_size': 3,
+                               'padding': padding,
+                               'strides': strides,
+                               'data_format': 'channels_last'},
+                       input_shape=(num_samples, num_row, num_col, stack_size),
+                       fixed_batch_size=True)
 
-    layer_test(convolutional.Conv2DTranspose,
+    layer_test(convolutional.Deconvolution2D,
                kwargs={'filters': filters,
                        'kernel_size': 3,
                        'padding': padding,
@@ -253,34 +252,14 @@ def test_conv2d_transpose():
 
     # Test invalid use case
     with pytest.raises(ValueError):
-        model = Sequential([convolutional.Conv2DTranspose(
-            filters=filters,
-            kernel_size=3,
-            padding=padding,
-            use_bias=True,
-            batch_input_shape=(None, None, 5, None))])
-
-    # Test invalid output padding for given stride. Output padding equal
-    # to stride
-    with pytest.raises(ValueError):
-        model = Sequential([convolutional.Conv2DTranspose(
-            filters=filters,
-            kernel_size=3,
-            padding=padding,
-            output_padding=(0, 3),
-            strides=(1, 3),
-            batch_input_shape=(None, num_row, num_col, stack_size))])
-    # Output padding greater than stride
-    with pytest.raises(ValueError):
-        model = Sequential([convolutional.Conv2DTranspose(
-            filters=filters,
-            kernel_size=3,
-            padding=padding,
-            output_padding=(2, 2),
-            strides=(1, 3),
-            batch_input_shape=(None, num_row, num_col, stack_size))])
+        model = Sequential([convolutional.Conv2DTranspose(filters=filters,
+                                                          kernel_size=3,
+                                                          padding=padding,
+                                                          batch_input_shape=(None, None, 5, None))])
 
 
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support Separable Conv1D yet.')
 @keras_test
 def test_separable_conv_1d():
     num_samples = 2
@@ -333,6 +312,8 @@ def test_separable_conv_1d():
                                                           batch_input_shape=(None, 5, None))])
 
 
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support Separable Conv2D yet.')
 @keras_test
 def test_separable_conv_2d():
     num_samples = 2

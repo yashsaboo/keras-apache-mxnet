@@ -32,6 +32,10 @@ import argparse
 import os
 
 
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Cannot auto infer input shapes.")
+
+
 # reparameterization trick
 # instead of sampling from Q(z|X), sample eps = N(0,I)
 # then z = z_mean + sqrt(var)*eps

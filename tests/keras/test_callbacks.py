@@ -470,6 +470,8 @@ def test_CSVLogger(tmpdir):
 
 
 @keras_test
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend does not support it yet.')
 def test_TensorBoard(tmpdir):
     np.random.seed(np.random.randint(1, 1e7))
     filepath = str(tmpdir / 'logs')

@@ -1122,6 +1122,7 @@ class TestBackend(object):
                                        BACKENDS_WITHOUT_MXNET, cntk_dynamicity=True,
                                        data_format=data_format)
 
+    @pytest.mark.skipif(K.backend() == 'theano' or K.backend() == 'mxnet', reason='Not supported.')
     @pytest.mark.parametrize('op,input_shape,kernel_shape,depth_multiplier,padding,data_format', [
         ('separable_conv1d', (2, 8, 2), (3,), 1, 'same', 'channels_last'),
         ('separable_conv1d', (1, 8, 2), (3,), 2, 'valid', 'channels_last'),
@@ -1240,6 +1241,8 @@ class TestBackend(object):
             assert np.max(samples) == 1
             assert np.min(samples) == 0
 
+    @pytest.mark.skipif(K.backend() == 'mxnet',
+                        reason="MXNet backend does not support truncated normal yet.")
     def test_truncated_normal(self):
         mean = 0.
         std = 1.
@@ -1273,7 +1276,7 @@ class TestBackend(object):
         with pytest.raises(ValueError):
             K.conv3d(dummy_x_3d, dummy_w_3d, data_format='channels_middle')
 
-        if K.backend() != 'theano':
+        if K.backend() != 'theano' and K.backend() != 'mxnet':
             with pytest.raises(ValueError):
                 K.separable_conv2d(dummy_x_2d, dummy_w_2d, dummy_w1x1_2d,
                                    data_format='channels_middle')

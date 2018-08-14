@@ -63,6 +63,10 @@ install:
   # install TensorFlow (CPU version).
   - pip install tensorflow==1.7
   
+    # install Apache MXNet (CPU version).
+  - pip install mxnet
+  - pip install --upgrade numpy
+  
   # install cntk
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
       pip install https://cntk.ai/PythonWheel/CPU-Only/cntk-2.5.1-cp27-cp27mu-linux_x86_64.whl;

@@ -56,8 +56,7 @@ def normalize(x, axis=-1, order=2):
 
 
 def to_channels_first(data):
-    """
-    Transform the image data to `channels_first` format.
+    """Transform the image data to `channels_first` format.
 
     # Arguments
         data: A Numpy data tensor or a list of Numpy data tensor

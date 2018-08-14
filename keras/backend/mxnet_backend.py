@@ -273,7 +273,14 @@ def constant(value, dtype=None, shape=None, name=None):
     # Returns
         A Constant Tensor.
     """
-    if shape is None:
+    if dtype is None:
+        dtype = floatx()
+
+    if type(value) is np.ndarray:
+        mx_ndarray = mx.nd.array(value, dtype=dtype)
+    elif type(value) is list:
+        mx_ndarray = mx.nd.array(value, dtype=dtype)
+    elif shape is None:
         mx_ndarray = mx.nd.array(value, dtype=dtype)
     else:
         shape = tuple([0 if dim is None else dim for dim in shape])
@@ -2662,7 +2669,7 @@ def rnn(step_function, inputs, initial_states,
         warnings.warn('MXNet Backend: `unroll=False` is not supported yet in RNN. Since the input_shape is known, '
                       'setting `unroll=True` and continuing the execution.'
                       'More Details - '
-                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',
+                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',   # nopep8
                       stacklevel=2)  # nopep8
 
     # Split the inputs across time dimension and generate the list of inputs
@@ -3306,8 +3313,9 @@ def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
     """
     """
     # mathematical implementation of complete separable conv2d
-    return _sp_convnd(x,  depthwise_kernel, pointwise_kernel, strides=strides, padding_mode=padding, data_format=data_format,
-                          filter_dilation=dilation_rate)
+    return _sp_convnd(x,  depthwise_kernel, pointwise_kernel, strides=strides,
+                      padding_mode=padding, data_format=data_format,
+                      filter_dilation=dilation_rate)
     """
     # depthwise conv2d
     dw_conv = depthwise_conv2d(x, depthwise_kernel, strides=strides, padding=padding, data_format=data_format,
@@ -5102,6 +5110,10 @@ def get_optimizers():
     optimizers = importlib.import_module('keras.optimizers')
 
     class MXOptimizer(optimizers.Optimizer, mx.optimizer.Optimizer):
+        """Custom MXNet Optimizer wrapping Keras Optimizer.
+        This is required because we cannot use Keras optimizer directly as MXNet backend does not
+        support symbolic optimizers.
+        """
         def __init__(self, lr, decay):
             super(MXOptimizer, self).__init__()
             self.lr = variable(lr)
@@ -5117,6 +5129,18 @@ def get_optimizers():
             return config
 
     class SGD(MXOptimizer, mx.optimizer.SGD):
+        """Stochastic gradient descent optimizer.
+
+        Includes support for momentum,
+        learning rate decay, and Nesterov momentum.
+
+        # Arguments
+            lr: float >= 0. Learning rate.
+            momentum: float >= 0. Parameter that accelerates SGD
+                in the relevant direction and dampens oscillations.
+            decay: float >= 0. Learning rate decay over each update.
+            nesterov: boolean. Whether to apply Nesterov momentum.
+        """
         def __init__(self, lr=0.01, momentum=0., decay=0.,
                      nesterov=False, clipnorm=None, **kwargs):
             mx.optimizer.SGD.__init__(self, learning_rate=lr, momentum=momentum, clip_gradient=clipnorm, **kwargs)
@@ -5130,6 +5154,24 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class Adagrad(MXOptimizer, mx.optimizer.AdaGrad):
+        """Adagrad optimizer.
+
+        Adagrad is an optimizer with parameter-specific learning rates,
+        which are adapted relative to how frequently a parameter gets
+        updated during training. The more updates a parameter receives,
+        the smaller the updates.
+
+        It is recommended to leave the parameters of this optimizer
+        at their default values.
+
+        # Arguments
+            lr: float >= 0. Initial learning rate.
+            epsilon: float >= 0. If `None`, defaults to `K.epsilon()`.
+            decay: float >= 0. Learning rate decay over each update.
+
+        # References
+            - [Adaptive Subgradient Methods for Online Learning and Stochastic Optimization](http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf)  # nopep8
+        """
         def __init__(self, lr=0.01, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.AdaGrad.__init__(self, learning_rate=lr, eps=epsilon, clip_gradient=clipnorm, **kwargs)
             MXOptimizer.__init__(self, lr, decay)
@@ -5142,6 +5184,30 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class Adadelta(MXOptimizer, mx.optimizer.AdaDelta):
+        """Adadelta optimizer.
+
+        Adadelta is a more robust extension of Adagrad
+        that adapts learning rates based on a moving window of gradient updates,
+        instead of accumulating all past gradients. This way, Adadelta continues
+        learning even when many updates have been done. Compared to Adagrad, in the
+        original version of Adadelta you don't have to set an initial learning
+        rate. In this version, initial learning rate and decay factor can
+        be set, as in most other Keras optimizers.
+
+        It is recommended to leave the parameters of this optimizer
+        at their default values.
+
+        # Arguments
+            lr: float >= 0. Initial learning rate, defaults to 1.
+                It is recommended to leave it at the default value.
+            rho: float >= 0. Adadelta decay factor, corresponding to fraction of
+                gradient to keep at each time step.
+            epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+            decay: float >= 0. Initial learning rate decay.
+
+        # References
+            - [Adadelta - an adaptive learning rate method](http://arxiv.org/abs/1212.5701)
+        """
         def __init__(self, lr=1.0, rho=0.95, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.AdaDelta.__init__(self, rho=rho, epsilon=epsilon, clip_gradient=clipnorm, **kwargs)
             MXOptimizer.__init__(self, lr, decay)
@@ -5155,6 +5221,24 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class Adam(MXOptimizer, mx.optimizer.Adam):
+        """Adam optimizer.
+
+        Default parameters follow those provided in the original paper.
+
+        # Arguments
+            lr: float >= 0. Learning rate.
+            beta_1: float, 0 < beta < 1. Generally close to 1.
+            beta_2: float, 0 < beta < 1. Generally close to 1.
+            epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+            decay: float >= 0. Learning rate decay over each update.
+            amsgrad: boolean. Whether to apply the AMSGrad variant of this
+                algorithm from the paper "On the Convergence of Adam and
+                Beyond".
+
+        # References
+            - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
+            - [On the Convergence of Adam and Beyond](https://openreview.net/forum?id=ryQu7f-RZ)
+        """
         def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999,
                      epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.Adam.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2,
@@ -5171,6 +5255,20 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class Adamax(MXOptimizer, mx.optimizer.Adamax):
+        """Adamax optimizer from Adam paper's Section 7.
+
+        It is a variant of Adam based on the infinity norm.
+        Default parameters follow those provided in the paper.
+
+        # Arguments
+            lr: float >= 0. Learning rate.
+            beta_1/beta_2: floats, 0 < beta < 1. Generally close to 1.
+            epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+            decay: float >= 0. Learning rate decay over each update.
+
+        # References
+            - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
+        """
         def __init__(self, lr=0.002, beta_1=0.9, beta_2=0.999, decay=0., clipnorm=None,
                      epsilon=1e-8, **kwargs):
             mx.optimizer.Adamax.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2,
@@ -5188,6 +5286,24 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class Nadam(MXOptimizer, mx.optimizer.Nadam):
+        """Nesterov Adam optimizer.
+
+        Much like Adam is essentially RMSprop with momentum,
+        Nadam is Adam RMSprop with Nesterov momentum.
+
+        Default parameters follow those provided in the paper.
+        It is recommended to leave the parameters of this optimizer
+        at their default values.
+
+        # Arguments
+            lr: float >= 0. Learning rate.
+            beta_1/beta_2: floats, 0 < beta < 1. Generally close to 1.
+            epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+
+        # References
+            - [Nadam report](http://cs229.stanford.edu/proj2015/054_report.pdf)
+            - [On the importance of initialization and momentum in deep learning](http://www.cs.toronto.edu/~fritz/absps/momentum.pdf)  # nopep8
+        """
         def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=0., clipnorm=None,
                      schedule_decay=0.004, **kwargs):
             mx.optimizer.Nadam.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2, epsilon=epsilon,
@@ -5204,6 +5320,24 @@ def get_optimizers():
             return dict(list(base_config.items()) + list(config.items()))
 
     class RMSprop(MXOptimizer, mx.optimizer.RMSProp):
+        """RMSProp optimizer.
+
+        It is recommended to leave the parameters of this optimizer
+        at their default values
+        (except the learning rate, which can be freely tuned).
+
+        This optimizer is usually a good choice for recurrent
+        neural networks.
+
+        # Arguments
+            lr: float >= 0. Learning rate.
+            rho: float >= 0.
+            epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+            decay: float >= 0. Learning rate decay over each update.
+
+        # References
+            - [rmsprop: Divide the gradient by a running average of its recent magnitude](http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf)  # nopep8
+        """
         def __init__(self, lr=0.001, rho=0.9, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.RMSProp.__init__(self, learning_rate=lr, gamma1=rho, epsilon=epsilon,
                                           clip_gradient=clipnorm, **kwargs)

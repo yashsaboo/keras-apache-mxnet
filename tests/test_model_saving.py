@@ -10,6 +10,7 @@ from keras import backend as K
 from keras.engine.saving import preprocess_weights_for_loading
 from keras.models import Model, Sequential
 from keras.layers import Dense, Lambda, RepeatVector, TimeDistributed, Bidirectional, GRU, LSTM, CuDNNGRU, CuDNNLSTM
+from keras.layers import Embedding
 from keras.layers import Conv2D, Flatten
 from keras.layers import Input, InputLayer
 from keras.initializers import Constant

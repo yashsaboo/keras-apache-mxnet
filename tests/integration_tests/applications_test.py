@@ -10,8 +10,9 @@ from keras import backend as K
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get('CORE_CHANGED', 'True') == 'False' and
-    os.environ.get('APP_CHANGED', 'True') == 'False',
+    K.backend() == 'mxnet' or
+    (os.environ.get('CORE_CHANGED', 'True') == 'False' and
+     os.environ.get('APP_CHANGED', 'True') == 'False'),
     reason='Runs only when the relevant files have been modified.')
 
 
@@ -66,6 +67,8 @@ def _test_application_basic(app, last_dim=1000):
     assert output_shape == (None, last_dim)
 
 
+@pytest.mark.skipif((K.backend() == 'mxnet'),
+                    reason='MXNet backend requires input shape for convolution')
 @keras_test
 def _test_application_notop(app, last_dim):
     output_shape = _get_output_shape(
