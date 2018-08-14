@@ -288,7 +288,6 @@ class Sequential(Model):
             model.add(layer)
         return model
 
-
 # We need to overload the Keras Model class to handle MXNet model building activities.
 # get_model() returns the reference to MXNetModel that inherits and extends keras.engine.Model.
 if K.backend() == 'mxnet':

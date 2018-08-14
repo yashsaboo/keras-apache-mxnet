@@ -22,6 +22,11 @@ skipif_no_tf_gpu = pytest.mark.skipif(
     reason='Requires TensorFlow backend and a GPU')
 
 
+skipif_no_tf_gpu = pytest.mark.skipif(
+    (K.backend() != 'tensorflow') or (not K.tensorflow_backend._get_available_gpus()),
+    reason='Requires TensorFlow backend and a GPU')
+
+
 @keras_test
 def test_get_updates_for():
     a = Input(shape=(2,))
