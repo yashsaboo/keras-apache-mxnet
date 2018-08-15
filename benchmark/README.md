@@ -97,7 +97,7 @@ results document](benchmark_result/CNN_result.md).
 
 | Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
 |---|---|---|---|---|
-|  C5.X Large |  0 |  32 | 3.27  | 5.79  |
+|  C5.X Large |  0 |  32 | 5.79  | 3.27  |
 |  C5.8X Large | 0  | 32  | 27.9  | 18.2  |
 
 ```
