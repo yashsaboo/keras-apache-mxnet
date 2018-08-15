@@ -21,6 +21,9 @@ from keras.layers import Dense, Activation, Dropout
 from keras.layers.noise import AlphaDropout
 from keras.preprocessing.text import Tokenizer
 
+if K.backend() == 'mxnet':
+    raise NotImplementedError("MXNet Backend: Alpha Dropout is not supported yet.")
+
 max_words = 1000
 batch_size = 16
 epochs = 40
