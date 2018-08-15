@@ -4,7 +4,6 @@ from __future__ import print_function
 
 from keras_applications import nasnet
 
-
 NASNetMobile = nasnet.NASNetMobile
 NASNetLarge = nasnet.NASNetLarge
 decode_predictions = nasnet.decode_predictions

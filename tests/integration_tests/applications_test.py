@@ -3,14 +3,17 @@ import random
 import os
 from multiprocessing import Process, Queue
 from keras.utils.test_utils import keras_test
+from keras.utils.test_utils import layer_test
+from keras.models import Sequential
 from keras import applications
 from keras import backend as K
 
 
-pytestmark = pytest.mark.skipif(K.backend() == 'mxnet' or
-                                os.environ.get('CORE_CHANGED', 'True') == 'False' and
-                                os.environ.get('APP_CHANGED', 'True') == 'False',
-                                reason='Runs only when the relevant files have been modified.')
+pytestmark = pytest.mark.skipif(
+    K.backend() == 'mxnet' or
+    (os.environ.get('CORE_CHANGED', 'True') == 'False' and
+     os.environ.get('APP_CHANGED', 'True') == 'False'),
+    reason='Runs only when the relevant files have been modified.')
 
 
 MODEL_LIST = [

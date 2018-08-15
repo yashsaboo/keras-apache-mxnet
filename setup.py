@@ -16,7 +16,8 @@ Use Keras-MXNet if you need a deep learning library that:
 
 Read the Keras documentation at: https://keras.io/
 
-Read the Keras-MXNet documentation at: https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend
+Read the Keras-MXNet documentation at:
+https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend
 
 For a detailed overview of what makes Keras special, see:
 https://keras.io/why-use-keras/
@@ -25,8 +26,9 @@ and is distributed under the MIT liense.
 '''
 
 setup(name='keras-mxnet',
-      version='2.2.0',
-      description='Deep Learning for humans. Keras with highly scalable, high performance Apache MXNet backend support.',
+      version='2.2.2',
+      description='Deep Learning for humans. Keras with highly scalable,\
+                   high performance Apache MXNet backend support.',
       long_description=long_description,
       author='Amazon Web Services',
       url='https://github.com/awslabs/keras-apache-mxnet',
@@ -36,7 +38,7 @@ setup(name='keras-mxnet',
                         'six>=1.9.0',
                         'h5py>=2.7.1',
                         'pyyaml',
-                        'keras_applications==1.0.2',
+                        'keras_applications==1.0.4',
                         'keras_preprocessing==1.0.1'],
       extras_require={
           'visualize': ['pydot>=1.2.4'],

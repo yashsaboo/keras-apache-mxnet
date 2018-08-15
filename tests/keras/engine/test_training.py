@@ -498,22 +498,23 @@ def test_model_methods():
     if K.backend() != 'mxnet':
         # Create a model with a single output.
         single_output_model = Model([a, b], a_2)
-        single_output_model.compile(optimizer, loss, metrics=[], sample_weight_mode=None)
+        single_output_model.compile(optimizer, loss,
+                                    metrics=[], sample_weight_mode=None)
 
         # Single output and one step.
         batch_size = 5
         sequence_length = 1
         shape_0, _ = expected_shape(batch_size, sequence_length)
-        out = single_output_model.predict_generator(RandomSequence(batch_size,
-                                                    sequence_length=sequence_length))
+        out = single_output_model.predict_generator(
+            RandomSequence(batch_size, sequence_length=sequence_length))
         assert np.shape(out) == shape_0
 
         # Single output and multiple steps.
         batch_size = 5
         sequence_length = 2
         shape_0, _ = expected_shape(batch_size, sequence_length)
-        out = single_output_model.predict_generator(RandomSequence(batch_size,
-                                                    sequence_length=sequence_length))
+        out = single_output_model.predict_generator(
+            RandomSequence(batch_size, sequence_length=sequence_length))
         assert np.shape(out) == shape_0
 
 
@@ -543,7 +544,7 @@ def test_warnings():
                    [np.random.random((batch_sz, 4)),
                     np.random.random((batch_sz, 3))])
 
-    with pytest.warns(UserWarning) as w:
+    with pytest.warns(Warning) as w:
         out = model.fit_generator(gen_data(4),
                                   steps_per_epoch=10,
                                   use_multiprocessing=True,

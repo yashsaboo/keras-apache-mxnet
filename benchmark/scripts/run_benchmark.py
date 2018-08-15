@@ -66,8 +66,11 @@ model = model_config.get_model_config(args.model_name)
 
 use_dataset_tensors = False
 if args.epochs:
-    model.run_benchmark(gpus=config['gpus'], inference=inference, use_dataset_tensors=use_dataset_tensors, epochs=int(args.epochs))
+    model.run_benchmark(gpus=config['gpus'], inference=inference,
+                        use_dataset_tensors=use_dataset_tensors,
+                        epochs=int(args.epochs))
 else:
-    model.run_benchmark(gpus=config['gpus'], inference=inference, use_dataset_tensors=use_dataset_tensors)
+    model.run_benchmark(gpus=config['gpus'], inference=inference,
+                        use_dataset_tensors=use_dataset_tensors)
 if args.dry_run:
     print("Model :total_time", model.test_name, model.total_time)

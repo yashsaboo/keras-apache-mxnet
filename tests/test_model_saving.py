@@ -13,6 +13,7 @@ from keras.layers import Dense, Lambda, RepeatVector, TimeDistributed, Bidirecti
 from keras.layers import Embedding
 from keras.layers import Conv2D, Flatten
 from keras.layers import Input, InputLayer
+from keras.initializers import Constant
 from keras import optimizers
 from keras import losses
 from keras import metrics
@@ -302,7 +303,6 @@ def test_loading_weights_by_name_and_reshape():
         model.load_weights(fname, by_name=False, reshape=False)
     model.load_weights(fname, by_name=False, reshape=True)
     model.load_weights(fname, by_name=True, reshape=True)
-    os.remove(fname)
 
     out2 = model.predict(x)
     assert_allclose(np.squeeze(out), np.squeeze(out2), atol=1e-05)
@@ -312,6 +312,35 @@ def test_loading_weights_by_name_and_reshape():
             # only compare layers that have weights, skipping Flatten()
             if old_weights[i]:
                 assert_allclose(old_weights[i][j], new_weights[j], atol=1e-05)
+
+    # delete and recreate model with `use_bias=False`
+    del(model)
+    model = Sequential()
+    model.add(Conv2D(2, (1, 1), input_shape=(1, 1, 1), use_bias=False, name='rick'))
+    model.add(Flatten())
+    model.add(Dense(3, name='morty'))
+    with pytest.raises(ValueError,
+                       match=r'.* expects [0-9]+ .* but the saved .* [0-9]+ .*'):
+        model.load_weights(fname)
+    with pytest.raises(ValueError,
+                       match=r'.* expects [0-9]+ .* but the saved .* [0-9]+ .*'):
+        model.load_weights(fname, by_name=True)
+    with pytest.warns(UserWarning,
+                      match=r'Skipping loading .* due to mismatch .*'):
+        model.load_weights(fname, by_name=True, skip_mismatch=True)
+
+    # delete and recreate model with `filters=10`
+    del(model)
+    model = Sequential()
+    model.add(Conv2D(10, (1, 1), input_shape=(1, 1, 1), name='rick'))
+    with pytest.raises(ValueError,
+                       match=r'.* has shape .* but the saved .* shape .*'):
+        model.load_weights(fname, by_name=True)
+    with pytest.raises(ValueError,
+                       match=r'.* load .* [0-9]+ layers into .* [0-9]+ layers.'):
+        model.load_weights(fname)
+
+    os.remove(fname)
 
 
 @keras_test
@@ -619,6 +648,21 @@ def test_saving_recurrent_layer_without_bias():
     model.save(fname)
 
     loaded_model = load_model(fname)
+    os.remove(fname)
+
+
+@keras_test
+def test_saving_constant_initializer_with_numpy():
+    """Test saving and loading model of constant initializer with numpy ndarray as input.
+    """
+    model = Sequential()
+    model.add(Dense(2, input_shape=(3,), kernel_initializer=Constant(np.ones((3, 2)))))
+    model.add(Dense(3))
+    model.compile(loss='mse', optimizer='sgd', metrics=['acc'])
+
+    _, fname = tempfile.mkstemp('.h5')
+    save_model(model, fname)
+    model = load_model(fname)
     os.remove(fname)
 
 

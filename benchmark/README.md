@@ -6,6 +6,7 @@
 2. [Library Versions](#library-versions)
 3. [CNN Benchmarks](#cnn-benchmarks)
     1. [CNN Benchmark Results](#cnn-benchmark-results)
+    2. [CNN Inference Benchmark Results](#cnn-inference-benchmark-results)
 4. [RNN Benchmarks (Experimental)](#rnn-benchmarks-experimental)
 5. [Setup](#setup)
 6. [How to Run CNN Benchmarks](#how-to-run-cnn-benchmarks)
@@ -89,7 +90,16 @@ NOTE:
 You can see more benchmark experiments with different instance types, batch_size and other parameters in [detailed CNN 
 results document](benchmark_result/CNN_result.md).
 
- 
+
+### CNN Inference Benchmark Results
+
+#### ResNet50-Synthetic Data
+
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (img/sec)  | Keras-TensorFlow (img/sec)  |
+|---|---|---|---|---|
+|  C5.X Large |  0 |  32 | 5.79  | 3.27  |
+|  C5.8X Large | 0  | 32  | 27.9  | 18.2  |
+
 ```
 NOTE:
     1. Image_data_format for MXNet backend - 'channels_first'
@@ -190,6 +200,18 @@ For TensorFlow backend benchmarks:
     $ sh run_tf_backend.sh gpu_config resnet50 False 20 # For 1 GPU Benchmarks
     $ sh run_tf_backend.sh 4_gpu_config resnet50 False 20 # For 4 GPU Benchmarks
     $ sh run_tf_backend.sh 8_gpu_config resnet50 False 20 # For 8 GPU Benchmarks
+```
+
+### ResNet50-Synthetic Inference Benchmarks
+
+For MXNet backend inference benchmarks:
+```
+    $ sh run_mxnet_backend.sh cpu_config resnet50 True 20
+```
+
+For TensorFlow backend inference benchmarks:
+```
+    $ sh run_tf_backend.sh cpu_config resnet50 True 20
 ```
 
 The last parameter, 20, in the command is the number of epoch.

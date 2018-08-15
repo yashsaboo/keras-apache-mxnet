@@ -69,12 +69,16 @@ def _test_optimizer(optimizer, target=0.75):
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
 @keras_test
-def _test_no_grad(optimizer):
+@pytest.mark.skipif((K.backend() != 'tensorflow'),
+                    reason="Only Tensorflow raises a "
+                           "ValueError if the gradient is null.")
+def test_no_grad():
     inp = Input([3])
     x = Dense(10)(inp)
-    x = Lambda(lambda l: 1.0 * K.reshape(K.cast(K.argmax(l), 'float32'), [-1, 1]))(x)
+    x = Lambda(lambda l: 1.0 * K.reshape(K.cast(K.argmax(l), 'float32'), [-1, 1]),
+               output_shape=lambda x: [x[0], 1])(x)
     mod = Model(inp, x)
-    mod.compile(optimizer, 'mse')
+    mod.compile('sgd', 'mse')
     with pytest.raises(ValueError):
         mod.fit(np.zeros([10, 3]), np.zeros([10, 1], np.float32), batch_size=10, epochs=10)
 
@@ -87,7 +91,6 @@ def _test_no_grad(optimizer):
 def test_sgd():
     sgd = optimizers.SGD(lr=0.01, momentum=0.9, nesterov=True)
     _test_optimizer(sgd)
-    _test_no_grad(sgd)
 
 
 @pytest.mark.skipif(K.backend() == 'mxnet',

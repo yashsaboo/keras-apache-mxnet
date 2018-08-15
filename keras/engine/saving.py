@@ -156,8 +156,7 @@ def save_model(model, filepath, overwrite=True, include_optimizer=True):
         # if obj is any numpy type
         if type(obj).__module__ == np.__name__:
             if isinstance(obj, np.ndarray):
-                return {'type': type(obj),
-                        'value': obj.tolist()}
+                return obj.tolist()
             else:
                 return obj.item()
 
@@ -910,7 +909,7 @@ def _need_convert_kernel(original_backend):
     The convolution operation is implemented differently in different backends.
     While TH implements convolution, TF and CNTK implement the correlation operation.
     So the channel axis needs to be flipped when we're loading TF weights onto a TH model,
-    or vice verca. However, there's no conversion required between TF and CNTK.
+    or vice versa. However, there's no conversion required between TF and CNTK.
 
     # Arguments
         original_backend: Keras backend the weights were trained with, as a string.
@@ -923,8 +922,7 @@ def _need_convert_kernel(original_backend):
         return False
     uses_correlation = {'tensorflow': True,
                         'theano': False,
-                        'cntk': True,
-                        'mxnet': False}
+                        'cntk': True}
     if original_backend not in uses_correlation:
         # By default, do not convert the kernels if the original backend is unknown
         return False
