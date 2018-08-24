@@ -31,9 +31,9 @@ def invoke_benchmark(batch_size, epochs):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch',
+    parser.add_argument('--batch', default=128,
                         help='Batch of data to be processed for training')
-    parser.add_argument('--epochs',
+    parser.add_argument('--epochs', default=1000,
                         help='Number of epochs to train the model on. Set epochs>=1000 for the best results')
     args = parser.parse_args()
 
