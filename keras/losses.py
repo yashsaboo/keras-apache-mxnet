@@ -135,12 +135,6 @@ def get(identifier):
     if isinstance(identifier, dict):
         return deserialize(identifier)
     elif callable(identifier):
-        if K.backend() == 'mxnet':
-            warnings.warn('MXNet Backend: If you are using a custom loss function and use slice operator in custom '
-                          'loss function, please set the **_keras_shape** attribute of the loss tensor explicitly.\n\n'
-                          'Without this workaround, you may encounter shape mismatch errors in the broadcast '
-                          'operations.\n\nFor more details - '
-                          'https://github.com/awslabs/keras-apache-mxnet/issues/120\n\n')
         return identifier
     else:
         raise ValueError('Could not interpret '

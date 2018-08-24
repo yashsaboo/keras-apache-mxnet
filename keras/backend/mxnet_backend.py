@@ -3931,18 +3931,52 @@ class KerasSymbol(object):
         # Convert it to a tuple iterator for single dimensional bias Tensors
         if not isinstance(in_slice, (list, tuple)):
             in_slice = (in_slice,)
+
+        # MXNet sym.slice() operator does not support slicing the complete axis with '-1' indexing.
+        # See here for more details - https://github.com/awslabs/keras-apache-mxnet/issues/113
+        # This is a workaround solution, where:
+        # 1. We slice all the elements with indexing -1
+        # 2. Squeeze the axis to get the effect of slicing the complete axis.
+        # Ex: if input.shape (2,2,3) and indexing is like input[:, -1, :]
+        #     1. After step 1, result = (2,1,3)
+        #     2. After step 2, result = (2,3) which is same as Numpy and other backend behavior.
+        slice_axis = False
+        sliced_dim = [d for d in range(len(in_slice)) if in_slice[d] == -1]
         for i in in_slice:
             if isinstance(i, int):
-                begin.append(i)
-                end.append(i + 1)
+                # Want to slice the complete axis
+                if i < -1:
+                    raise NotImplementedError('MXNet Backend: Does not support slicing with < -1 indexing. Given - ', i)
+                elif i == -1:
+                    begin.append(-1)
+                    end.append(None)
+                    slice_axis = True
+                else:
+                    begin.append(i)
+                    end.append(i + 1)
             elif isinstance(i, slice):
                 assert i.step is None or i.step == 1
                 begin.append(i.start)
                 end.append(i.stop)
             else:
                 raise AttributeError('MXNet Backend: KerasSymbol __getitem__ error.')
-        return KerasSymbol(mx.sym.slice(self.symbol, begin=tuple(begin),
-                                        end=tuple(end)), neighbors=[self])
+        sliced_res = mx.sym.slice(self.symbol, begin=tuple(begin),
+                                  end=tuple(end))
+        if slice_axis:
+            num_sliced_axis = 0
+            for dim in sliced_dim:
+                sliced_res = mx.sym.squeeze(sliced_res, axis=dim - num_sliced_axis)
+                num_sliced_axis += 1
+
+        sliced_keras_symbol = KerasSymbol(sliced_res, neighbors=[self])
+
+        # MXNet does not support Scalars. To overcome that,
+        # we have introduced a logic to identify (1, ) shaped tensor as vector or scalar.
+        # See eval() function for more details.
+        # Output of slicing is always a Vector. Without this flag, eval(a tensor with (1,) shape)
+        # will be returned as Scalar.
+        sliced_keras_symbol._is_vector = True
+        return sliced_keras_symbol
 
     @keras_mxnet_symbol
     def __abs__(self):
