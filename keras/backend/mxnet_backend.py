@@ -167,9 +167,12 @@ def cast_to_floatx(x):
 
 
 def is_sparse(tensor):
-    """
-    MXNet backend do not yet support sparse tensor operations.
-    """
+    if hasattr(tensor, 'tocoo'):
+        return True
+    elif isinstance(tensor, KerasSymbol):
+        if isinstance(_forward_pass(tensor)[0], mx.ndarray.sparse.CSRNDArray) or \
+                isinstance(_forward_pass(tensor)[0], mx.ndarray.sparse.RowSparseNDArray):
+                return True
     return False
 
 
@@ -194,7 +197,14 @@ def to_dense(tensor):
         False
     ```
     """
-    raise NotImplementedError('MXNet Backend: Sparse operations are not supported yet.')
+    if hasattr(tensor, 'tocoo'):
+        return tensor.toarray()
+    elif isinstance(tensor, mx.sym.Symbol):
+        return tensor.stype('default')
+    elif isinstance(tensor, KerasSymbol):
+        return eval(tensor)
+    else:
+        return tensor
 
 
 def variable(value, dtype=None, name=None, constraint=None):
@@ -239,6 +249,15 @@ def variable(value, dtype=None, name=None, constraint=None):
     if isinstance(value, KerasSymbol):
         value = eval(value)
 
+    if hasattr(value, 'tocoo'):
+        v = mx.nd.sparse.csr_matrix((value.data, value.indices, value.indptr), shape=value.shape)
+        name = _prepare_name(name, 'variable')
+        ret = _keras_variable(name, v.shape, v.dtype, 'csr', is_vector)
+        ret._keras_shape = value.shape
+        ret._uses_learning_phase = False
+        ret.bind(v)
+        return ret
+
     # MXNet backend do not support scalars
     if isinstance(value, np.ndarray) and len(value.shape) == 0:
         raise ValueError('MXNet Backend: Scalars are not supported. Provided value for variable '
@@ -247,8 +266,7 @@ def variable(value, dtype=None, name=None, constraint=None):
     dtype = _convert_string_dtype(dtype)
     name = _prepare_name(name, 'variable')
     ndarray = mx.nd.array(value, dtype=dtype)
-
-    ret = _keras_variable(name, ndarray.shape, ndarray.dtype, is_vector)
+    ret = _keras_variable(name, ndarray.shape, ndarray.dtype, 'default', is_vector)
     ret.bind(ndarray)
 
     if isinstance(value, np.ndarray):
@@ -375,9 +393,6 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
         placeholder1:[tensor=False dtype=float32]
     ```
     """
-    if sparse:
-        raise NotImplementedError('MXNet backend do not yet support sparse tensor operations.')
-
     if dtype is None:
         dtype = floatx()
 
@@ -385,12 +400,20 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     if shape is None and ndim is None:
         raise ValueError('MXNet Backend: Specify either a shape or ndim value.')
     name = _prepare_name(name, 'placeholder')
+
     if shape:
         shape = tuple([0 if dim is None else dim for dim in shape])
     else:
         shape = tuple([0 for _ in range(ndim)])
 
-    sym = _keras_variable(name, shape=shape, dtype=dtype)
+    if sparse:
+        sym = _keras_variable(name, shape=shape, dtype=dtype, stype='csr')
+        sym._keras_shape = tuple([d if d != 0 else None for d in shape])
+        sym._mxnet_placeholder = True
+        sym._uses_learning_phase = False
+        return sym
+
+    sym = _keras_variable(name, shape=shape, dtype=dtype, stype='default')
     sym._keras_shape = tuple([d if d != 0 else None for d in shape])
     sym._mxnet_placeholder = True
     sym._uses_learning_phase = False
@@ -557,12 +580,7 @@ def eval(x):
                 _MODEL._sync_weights()
             ret = x.eval().asnumpy()
         else:
-            bind_values = dfs_get_bind_values(x)
-            executor = x.symbol.simple_bind(mx.cpu(), grad_req='null')
-            for v in executor.arg_dict:
-                bind_values[v].copyto(executor.arg_dict[v])
-            outputs = executor.forward(is_train=learning_phase())
-            ret = outputs[0].asnumpy()
+            ret = _forward_pass(x)[0].asnumpy()
 
         # If the Tensor shape is (1, ) and does not have attribute "_is_vector", then, it is considered to be scalar.
         # Return the value.
@@ -2682,11 +2700,11 @@ def rnn(step_function, inputs, initial_states,
         inputs.reverse()
 
     # Assume learning phase is a placeholder tensor.(F = test, T = train)
-    # Some Keras layers (e.g. Dropout, BatchNormalization) behave differently at
+    # Some Keras layers (e.g. Dropout, BatchNormalization) behave differently at
     #  training time and testing time. You can tell whether a layer uses the
-    # "learning phase" (train/test) by printing layer.uses_learning_phase, a
-    # boolean: True if the layer has a different behavior in training mode and
-    # test mode, False otherwise.
+    # "learning phase" (train/test) by printing layer.uses_learning_phase, a
+    # boolean: True if the layer has a different behavior in training mode and
+    # test mode, False otherwise.
     global uses_learning_phase
     uses_learning_phase = False
 
@@ -4149,10 +4167,19 @@ def dfs_get_bind_values(node_start):
     return bind_values
 
 
-def _keras_variable(name, shape, dtype, is_vector=False, **kwargs):
+def _forward_pass(x):
+    bind_values = dfs_get_bind_values(x)
+    executor = x.symbol.simple_bind(mx.cpu(), grad_req='null')
+    for v in executor.arg_dict:
+        bind_values[v].copyto(executor.arg_dict[v])
+    outputs = executor.forward(is_train=learning_phase())
+    return outputs
+
+
+def _keras_variable(name, shape, dtype, stype='default', is_vector=False, **kwargs):
     if dtype is None:
         dtype = floatx()
-    v = mx.sym.Variable(name, shape=shape, dtype=dtype, **kwargs)
+    v = mx.sym.Variable(name, shape=shape, stype=stype, dtype=dtype, **kwargs)
     ret = KerasSymbol(v, is_var=True)
 
     # MXNet does not support Scalars. Shape of a Scalar Tensor with MXNet is (1, ) instead of ().
