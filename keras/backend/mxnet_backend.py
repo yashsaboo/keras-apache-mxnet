@@ -17,6 +17,8 @@ _MODEL = None
 _REENTRY = False
 NAME_SCOPE_STACK = []
 
+py_all = all
+
 
 class name_scope(object):
     def __init__(self, name):
@@ -2030,6 +2032,10 @@ def concatenate(tensors, axis=-1):
 
     # Returns
         A tensor.
+
+    Note:
+    - MXNet supports sparse concat only for dim=0
+    - https://mxnet.apache.org/api/python/symbol/sparse.html#mxnet.symbol.sparse.concat
     """
     if axis < 0:
         rank = ndim(tensors[0])
@@ -2038,8 +2044,12 @@ def concatenate(tensors, axis=-1):
         else:
             axis = 0
 
-    tensors = [t.symbol for t in tensors]
-    return KerasSymbol(mx.sym.concat(*tensors, dim=axis))
+    symbols = [t.symbol for t in tensors]
+
+    if axis == 0 and py_all([is_sparse(t) for t in tensors]):
+        return KerasSymbol(mx.sym.sparse.concat(*symbols, dim=axis))
+
+    return KerasSymbol(mx.sym.concat(*symbols, dim=axis))
 
 
 @keras_mxnet_symbol
