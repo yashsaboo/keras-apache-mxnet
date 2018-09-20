@@ -3017,6 +3017,71 @@ def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
 
 
 @keras_mxnet_symbol
+def multi_hot_sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
+    """Calculate Categorical crossentropy with a list of integer targets (multi-labels)
+
+    # Arguments
+        target: An integer tensor.
+        output: A tensor resulting from a softmax
+            (unless `from_logits` is True, in which
+            case `output` is expected to be the logits).
+        from_logits: Boolean, whether `output` is the
+            result of a softmax, or is a tensor of logits.
+
+    # Returns
+        Output tensor.
+
+    # Example:
+    ```
+    # refer to examples/multi_hot_sparse_categorical_crossentropy.py
+    # for a multi-label classification problem with 3 classes
+    # target with multi labels in normal categorical crossentropy
+    >>>target_dense = np.array([[0, 1, 1], [1, 0, 1], [1, 0, 0]])
+    # output from softmax remains the same format
+    >>>output = np.array([[0.1, 0.4, 0.5],
+    >>>                   [0.4, 0.2, 0.4],
+    >>>                   [0.7, 0.2, 0.1]])
+    # target with multi labels in multi_hot categorical crossentropy
+    >>>y_true_np2 = np.array([[1, 2], [0, 2],[0]])
+    ```
+    """
+    # TODO: remove version check after mxnet 1.3.1 stable release
+    if mx.__version__ != '1.3.1':
+        raise NotImplementedError('MXNet Backend: multi_hot_sparse_categorical_crossentropy only'
+                                  'works with MXNet 1.3.1 or newer, please upgrade MXNet using:'
+                                  'pip install --upgrade mxnet --pre')
+    output_dimensions = list(range(ndim(output)))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(int_shape(output)))))
+
+    mx_output = output.symbol
+    # scale predictions so that the class probabilities of each sample sum to 1
+    if from_logits:
+        mx_output = mx.sym.softmax(mx_output, axis=axis)
+    else:
+        mx_output = mx.sym.broadcast_div(mx_output, mx.sym.sum(mx_output,
+                                                               axis=axis,
+                                                               keepdims=True))
+    # clip to prevent NaN's and Inf's
+    mx_output = mx.sym.clip(mx_output, a_min=epsilon(), a_max=1.0 - epsilon())
+
+    # using control flow ops to iterate output and take target (true label)
+    _step = lambda data, _: (mx.sym.take(data[0], data[1]), [])
+    data = [mx_output, target.symbol]
+    outputs, _ = mx.symbol.contrib.foreach(_step, data, [])
+
+    # calculate loss
+    # check if target is larger than 0, remove padded labels (-1)
+    outputs = - mx.sym.sum(mx.sym.broadcast_greater_equal(target.symbol, mx.sym.zeros((1, 1))) *
+                           mx.sym.log(outputs), axis=axis)
+    return KerasSymbol(outputs)
+
+
+@keras_mxnet_symbol
 def binary_crossentropy(target, output, from_logits=False):
     """Binary crossentropy between an output tensor and a target tensor.
 
