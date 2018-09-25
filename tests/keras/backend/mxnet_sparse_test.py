@@ -93,13 +93,14 @@ class TestMXNetSparse(object):
         assert_allclose(k_s, k_d, atol=1e-05)
 
     def test_sparse_dot(self):
-        test_sparse_matrix = self.generate_test_sparse_matrix()
+        x_sparse_1 = self.generate_test_sparse_matrix()
+        x_dense_1 = x_sparse_1.toarray()
 
         W = np.random.random((5, 4))
 
         t_W = K.variable(W)
-        k_s = K.eval(K.dot(K.variable(test_sparse_matrix), t_W))
-        k_d = K.eval(K.dot(K.variable(test_sparse_matrix), t_W))
+        k_s = K.eval(K.dot(K.variable(x_sparse_1), t_W))
+        k_d = K.eval(K.dot(K.variable(x_dense_1), t_W))
 
         assert k_s.shape == k_d.shape
         assert_allclose(k_s, k_d, atol=1e-05)

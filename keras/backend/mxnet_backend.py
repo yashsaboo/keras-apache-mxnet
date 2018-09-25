@@ -172,9 +172,11 @@ def is_sparse(tensor):
     if hasattr(tensor, 'tocoo'):
         return True
     elif isinstance(tensor, KerasSymbol):
-        if isinstance(_forward_pass(tensor)[0], mx.ndarray.sparse.CSRNDArray) or \
-                isinstance(_forward_pass(tensor)[0], mx.ndarray.sparse.RowSparseNDArray):
-                return True
+        if len(tensor.get_bind_values()) > 0:
+            forward_pass_tensor = _forward_pass(tensor)[0]
+            if isinstance(forward_pass_tensor, mx.ndarray.sparse.CSRNDArray) or \
+                    isinstance(forward_pass_tensor, mx.ndarray.sparse.RowSparseNDArray):
+                    return True
     return False
 
 
@@ -4246,7 +4248,8 @@ def _forward_pass(x):
     bind_values = dfs_get_bind_values(x)
     executor = x.symbol.simple_bind(mx.cpu(), grad_req='null')
     for v in executor.arg_dict:
-        bind_values[v].copyto(executor.arg_dict[v])
+        if v in bind_values.keys():
+            bind_values[v].copyto(executor.arg_dict[v])
     outputs = executor.forward(is_train=learning_phase())
     return outputs
 

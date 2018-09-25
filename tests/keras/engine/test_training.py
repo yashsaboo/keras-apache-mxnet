@@ -560,8 +560,10 @@ def test_warnings():
     assert all(['Sequence' not in str(w_.message) for w_ in w]), 'A warning was raised for Sequence.'
 
 
-@pytest.mark.skipif(K.backend() != 'tensorflow',
-                    reason='sparse operations supported only by TensorFlow')
+@pytest.mark.skipif(K.backend() == 'cntk',
+                    reason='sparse operations not supported by CNTK')
+@pytest.mark.skipif(K.backend() == 'theano',
+                    reason='sparse operations not supported by Theano')
 @keras_test
 def test_sparse_inputs_targets():
     test_inputs = [sparse.random(6, 3, density=0.25).tocsr() for _ in range(2)]
