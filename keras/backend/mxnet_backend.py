@@ -172,11 +172,8 @@ def is_sparse(tensor):
     if hasattr(tensor, 'tocoo'):
         return True
     elif isinstance(tensor, KerasSymbol):
-        if len(tensor.get_bind_values()) > 0:
-            forward_pass_tensor = _forward_pass(tensor)[0]
-            if isinstance(forward_pass_tensor, mx.ndarray.sparse.CSRNDArray) or \
-                    isinstance(forward_pass_tensor, mx.ndarray.sparse.RowSparseNDArray):
-                    return True
+        if tensor.get_stype() == 'csr':
+            return True
     return False
 
 
@@ -2047,9 +2044,6 @@ def concatenate(tensors, axis=-1):
             axis = 0
 
     symbols = [t.symbol for t in tensors]
-
-    if axis == 0 and py_all([is_sparse(t) for t in tensors]):
-        return KerasSymbol(mx.sym.sparse.concat(*symbols, dim=axis))
 
     return KerasSymbol(mx.sym.concat(*symbols, dim=axis))
 
@@ -3931,7 +3925,7 @@ class KerasSymbol(object):
     computation graph and binding values.
     """
 
-    def __init__(self, mxnet_symbol, neighbors=None, is_var=False):
+    def __init__(self, mxnet_symbol, stype='default', neighbors=None, is_var=False):
         if not isinstance(mxnet_symbol, mx.sym.Symbol):
             raise TypeError('MXNet Backend: Please use a MXNet Symbol to instantiate '
                             'a Keras Symbol.')
@@ -3949,6 +3943,7 @@ class KerasSymbol(object):
                 self.add_neighbor(node)
         self._bind_values = {}
         self.tensor = None
+        self._stype = stype
 
     def bind(self, data):
         if not hasattr(self, 'tensor'):
@@ -3981,6 +3976,9 @@ class KerasSymbol(object):
 
     def get_bind_values(self):
         return self._bind_values
+
+    def get_stype(self):
+        return self._stype
 
     @property
     def symbol(self):
@@ -4258,7 +4256,7 @@ def _keras_variable(name, shape, dtype, stype='default', is_vector=False, **kwar
     if dtype is None:
         dtype = floatx()
     v = mx.sym.Variable(name, shape=shape, stype=stype, dtype=dtype, **kwargs)
-    ret = KerasSymbol(v, is_var=True)
+    ret = KerasSymbol(v, stype=stype, is_var=True)
 
     # MXNet does not support Scalars. Shape of a Scalar Tensor with MXNet is (1, ) instead of ().
     # This flag is used to identify Scalar Keras Variable versus a Tensor of shape (1, ) i.e., vector.

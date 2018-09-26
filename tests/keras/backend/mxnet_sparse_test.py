@@ -52,114 +52,110 @@ class TestMXNetSparse(object):
 
     def test_sparse_sum(self):
         test_sparse_matrix = self.generate_test_sparse_matrix()
+        test_dense_matrix = test_sparse_matrix.toarray()
 
-        x_dense = test_sparse_matrix.toarray()
-        test_var = K.variable(test_sparse_matrix)
-        dense_var = K.variable(x_dense)
+        sparse_var = K.variable(test_sparse_matrix)
+        dense_var = K.variable(test_dense_matrix)
 
-        k_s = K.eval(K.sum(test_var, axis=0))
+        k_s = K.eval(K.sum(sparse_var, axis=0))
         k_d = K.eval(K.sum(dense_var, axis=0))
 
-        assert K.is_sparse(test_var)
+        assert K.is_sparse(sparse_var)
         assert k_s.shape == k_d.shape
         assert_allclose(k_s, k_d, atol=1e-05)
 
     def test_sparse_mean(self):
         test_sparse_matrix = self.generate_test_sparse_matrix()
+        test_dense_matrix = test_sparse_matrix.toarray()
 
-        x_dense = test_sparse_matrix.toarray()
-        test_var = K.variable(test_sparse_matrix)
-        dense_var = K.variable(x_dense)
+        sparse_var = K.variable(test_sparse_matrix)
+        dense_var = K.variable(test_dense_matrix)
 
-        k_s = K.eval(K.mean(test_var, axis=0))
+        k_s = K.eval(K.mean(sparse_var, axis=0))
         k_d = K.eval(K.mean(dense_var, axis=0))
 
-        assert K.is_sparse(test_var)
+        assert K.is_sparse(sparse_var)
         assert k_s.shape == k_d.shape
         assert_allclose(k_s, k_d, atol=1e-05)
 
     def test_sparse_mean_axis_none(self):
         test_sparse_matrix = self.generate_test_sparse_matrix()
+        test_dense_matrix = test_sparse_matrix.toarray()
 
-        x_dense = test_sparse_matrix.toarray()
-        test_var = K.variable(test_sparse_matrix)
-        dense_var = K.variable(x_dense)
+        sparse_var = K.variable(test_sparse_matrix)
+        dense_var = K.variable(test_dense_matrix)
 
-        k_s = K.eval(K.mean(test_var))
+        k_s = K.eval(K.mean(sparse_var))
         k_d = K.eval(K.mean(dense_var))
 
-        assert K.is_sparse(test_var)
+        assert K.is_sparse(sparse_var)
         assert k_s.shape == k_d.shape
         assert_allclose(k_s, k_d, atol=1e-05)
 
     def test_sparse_dot(self):
-        x_sparse_1 = self.generate_test_sparse_matrix()
-        x_dense_1 = x_sparse_1.toarray()
+        test_sparse_matrix = self.generate_test_sparse_matrix()
+        test_dense_matrix = test_sparse_matrix.toarray()
 
         W = np.random.random((5, 4))
 
         t_W = K.variable(W)
-        k_s = K.eval(K.dot(K.variable(x_sparse_1), t_W))
-        k_d = K.eval(K.dot(K.variable(x_dense_1), t_W))
+        k_s = K.eval(K.dot(K.variable(test_sparse_matrix), t_W))
+        k_d = K.eval(K.dot(K.variable(test_dense_matrix), t_W))
 
         assert k_s.shape == k_d.shape
         assert_allclose(k_s, k_d, atol=1e-05)
 
-    @pytest.mark.skip('diabled temporary until sparse_concat is fixed ')
     def test_sparse_concat(self):
-        x_sparse_1 = self.generate_test_sparse_matrix()
-        x_sparse_2 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_1 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_2 = self.generate_test_sparse_matrix()
 
-        assert K.is_sparse(K.variable(x_sparse_1))
-        assert K.is_sparse(K.variable(x_sparse_2))
-        x_dense_1 = x_sparse_1.toarray()
-        x_dense_2 = x_sparse_2.toarray()
+        assert K.is_sparse(K.variable(test_sparse_matrix_1))
+        assert K.is_sparse(K.variable(test_sparse_matrix_2))
 
-        k_s = K.concatenate(tensors=[K.variable(x_sparse_1), K.variable(x_sparse_2)], axis=0)
-        assert K.is_sparse(k_s)
+        test_dense_matrix_1 = test_sparse_matrix_1.toarray()
+        test_dense_matrix_2 = test_sparse_matrix_2.toarray()
 
+        k_s = K.concatenate(tensors=[K.variable(test_sparse_matrix_1), K.variable(test_sparse_matrix_2)], axis=0)
         k_s_d = K.eval(k_s)
 
         # mx.sym.sparse.concat only supported for axis=0
-        k_d = K.eval(K.concatenate(tensors=[K.variable(x_dense_1), K.variable(x_dense_2)], axis=0))
+        k_d = K.eval(K.concatenate(tensors=[K.variable(test_dense_matrix_1), K.variable(test_dense_matrix_2)], axis=0))
 
         assert k_s_d.shape == k_d.shape
         assert_allclose(k_s_d, k_d, atol=1e-05)
 
     def test_sparse_concat_partial_dense(self):
-        x_sparse_1 = self.generate_test_sparse_matrix()
-        x_sparse_2 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_1 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_2 = self.generate_test_sparse_matrix()
 
-        assert K.is_sparse(K.variable(x_sparse_1))
-        x_dense_1 = x_sparse_1.toarray()
-        x_dense_2 = x_sparse_2.toarray()
+        assert K.is_sparse(K.variable(test_sparse_matrix_1))
+        assert K.is_sparse(K.variable(test_sparse_matrix_2))
 
-        k_s = K.concatenate(tensors=[K.variable(x_sparse_1), K.variable(x_dense_2)], axis=0)
-        assert not(K.is_sparse(k_s))
+        test_dense_matrix_1 = test_sparse_matrix_1.toarray()
+        test_dense_matrix_2 = test_sparse_matrix_2.toarray()
 
+        k_s = K.concatenate(tensors=[K.variable(test_sparse_matrix_1), K.variable(test_dense_matrix_2)], axis=0)
         k_s_d = K.eval(k_s)
 
         # mx.sym.sparse.concat only supported for axis=0
-        k_d = K.eval(K.concatenate(tensors=[K.variable(x_dense_1), K.variable(x_dense_2)], axis=0))
+        k_d = K.eval(K.concatenate(tensors=[K.variable(test_dense_matrix_1), K.variable(test_dense_matrix_2)], axis=0))
 
         assert k_s_d.shape == k_d.shape
         assert_allclose(k_s_d, k_d, atol=1e-05)
 
     def test_sparse_concat_axis_non_zero(self):
-        x_sparse_1 = self.generate_test_sparse_matrix()
-        x_sparse_2 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_1 = self.generate_test_sparse_matrix()
+        test_sparse_matrix_2 = self.generate_test_sparse_matrix()
 
-        assert K.is_sparse(K.variable(x_sparse_1))
-        x_dense_1 = x_sparse_1.toarray()
-        x_dense_2 = x_sparse_2.toarray()
+        assert K.is_sparse(K.variable(test_sparse_matrix_1))
+        test_dense_matrix_1 = test_sparse_matrix_1.toarray()
+        test_dense_matrix_2 = test_sparse_matrix_2.toarray()
 
-        k_s = K.concatenate(tensors=[K.variable(x_sparse_1), K.variable(x_dense_2)])
-        assert not (K.is_sparse(k_s))
-
+        k_s = K.concatenate(tensors=[K.variable(test_sparse_matrix_1), K.variable(test_dense_matrix_2)])
         k_s_d = K.eval(k_s)
 
         # mx.sym.sparse.concat only supported for axis=0
-        k_d = K.eval(K.concatenate(tensors=[K.variable(x_dense_1), K.variable(x_dense_2)]))
+        k_d = K.eval(K.concatenate(tensors=[K.variable(test_dense_matrix_1), K.variable(test_dense_matrix_2)]))
 
         assert k_s_d.shape == k_d.shape
         assert_allclose(k_s_d, k_d, atol=1e-05)
