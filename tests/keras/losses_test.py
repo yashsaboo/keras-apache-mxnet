@@ -109,6 +109,8 @@ def test_sparse_categorical_crossentropy_4d():
     assert np.isclose(expected_loss, np.mean(loss))
 
 
+@pytest.mark.skipif(K.backend() != 'mxnet', reason='multi_hot_sparse_categorical_crossentropy is only available '
+                                                   'in MXNet')
 def test_multi_hot_sparse_categorical_crossentropy():
     y_true_np = np.array([[0, 1, 1], [1, 0, 1], [1, 0, 0]])
     y_pred_np = np.array([[0.1, 0.4, 0.5],
