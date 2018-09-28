@@ -26,6 +26,13 @@ def test_embedding():
                input_shape=(3, 2, 5),
                input_dtype='int32',
                expected_output_dtype=K.floatx())
+    layer_test(Embedding,
+               kwargs={'output_dim': 4, 'input_dim': 10, 'mask_zero': True, 'input_length': (None, 5),
+                       'sparse_grad': True},
+               input_shape=(3, 2, 5),
+               input_dtype='int32',
+               expected_output_dtype=K.floatx()
+               )
 
 
 if __name__ == '__main__':

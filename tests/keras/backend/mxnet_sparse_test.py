@@ -160,6 +160,5 @@ class TestMXNetSparse(object):
         assert k_s_d.shape == k_d.shape
         assert_allclose(k_s_d, k_d, atol=1e-05)
 
-
 if __name__ == '__main__':
     pytest.main([__file__])
