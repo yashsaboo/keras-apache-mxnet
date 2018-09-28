@@ -5057,6 +5057,7 @@ def get_model():
 
                 batch = mx.io.DataBatch(data=data, label=label, bucket_key='train',
                                         provide_data=data_shapes, provide_label=label_shapes)
+
                 self._module.forward_backward(batch)
                 self._module.update()
                 self._update(self._train_updates)
