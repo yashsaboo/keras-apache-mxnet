@@ -381,6 +381,13 @@ class Model(Network):
                             metric_fn = metrics_module.sparse_categorical_accuracy
                         elif metric in ('crossentropy', 'ce'):
                             metric_fn = metrics_module.sparse_categorical_crossentropy
+                    elif self.loss_functions[i] == losses.multi_hot_sparse_categorical_crossentropy:
+                        # case: multi hot sparse categorical accuracy/crossentropy
+                        # with sparse list of integer targets
+                        if metric in ('accuracy', 'acc'):
+                            metric_fn = metrics_module.multi_hot_sparse_categorical_accuracy
+                        elif metric in ('crossentropy', 'ce'):
+                            metric_fn = metrics_module.multi_hot_sparse_categorical_crossentropy
                     else:
                         # case: categorical accuracy/crossentropy
                         if metric in ('accuracy', 'acc'):
@@ -778,13 +785,22 @@ class Model(Network):
                     else:
                         feed_output_shapes.append(output_shape)
 
+            check_last_layer_shape = True
+            # multi_hot_sparse_categorical_crossentropy only available in mxnet backend
+            if K.backend() == 'mxnet':
+                for loss_fn in self.loss_functions:
+                    if loss_fn is losses.multi_hot_sparse_categorical_crossentropy:
+                        # does not check the last layer shape when multi_hot_sparse_categorical_crossentropy \
+                        # is used, since we reduce the dimension of sparse labels.
+                        check_last_layer_shape = False
             # Standardize the outputs.
             y = standardize_input_data(
                 y,
                 feed_output_names,
                 feed_output_shapes,
                 check_batch_axis=False,  # Don't enforce the batch size.
-                exception_prefix='target')
+                exception_prefix='target',
+                check_last_layer_shape=check_last_layer_shape)
 
             # Generate sample-wise weight values given the `sample_weight` and
             # `class_weight` arguments.

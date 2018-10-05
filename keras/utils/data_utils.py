@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
 import hashlib
 import multiprocessing as mp
 import os
@@ -18,6 +19,7 @@ from abc import abstractmethod
 from contextlib import closing
 from multiprocessing.pool import ThreadPool
 
+import warnings
 import numpy as np
 import six
 from six.moves.urllib.error import HTTPError
@@ -297,6 +299,16 @@ def validate_file(fpath, file_hash, algorithm='auto', chunk_size=65535):
         return True
     else:
         return False
+
+
+def prepare_sliced_sparse_data(data, batch_size):
+    if data is None or data.shape[0] < batch_size:
+        warnings.warn('MXNet Backend: Cannot slice data')
+        return data
+    elif hasattr(data, 'tocoo'):  # Convert scipy sparse matrix to numpy array for slicing
+        data = data.toarray()
+    n = int(math.floor(data.shape[0] / batch_size))
+    return data[:n * batch_size]
 
 
 class Sequence(object):

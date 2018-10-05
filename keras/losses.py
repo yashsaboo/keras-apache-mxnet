@@ -74,6 +74,13 @@ def sparse_categorical_crossentropy(y_true, y_pred):
     return K.sparse_categorical_crossentropy(y_true, y_pred)
 
 
+def multi_hot_sparse_categorical_crossentropy(y_true, y_pred):
+    if K.backend() != 'mxnet':
+        raise NotImplementedError('multi_hot_sparse_categorical_crossentropy '
+                                  'is only available in MXNet backend')
+    return K.multi_hot_sparse_categorical_crossentropy(y_true, y_pred)
+
+
 def binary_crossentropy(y_true, y_pred):
     return K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
 
@@ -135,12 +142,6 @@ def get(identifier):
     if isinstance(identifier, dict):
         return deserialize(identifier)
     elif callable(identifier):
-        if K.backend() == 'mxnet':
-            warnings.warn('MXNet Backend: If you are using a custom loss function and use slice operator in custom '
-                          'loss function, please set the **_keras_shape** attribute of the loss tensor explicitly.\n\n'
-                          'Without this workaround, you may encounter shape mismatch errors in the broadcast '
-                          'operations.\n\nFor more details - '
-                          'https://github.com/awslabs/keras-apache-mxnet/issues/120\n\n')
         return identifier
     else:
         raise ValueError('Could not interpret '

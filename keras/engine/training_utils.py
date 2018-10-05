@@ -32,7 +32,8 @@ def standardize_input_data(data,
                            names,
                            shapes=None,
                            check_batch_axis=True,
-                           exception_prefix=''):
+                           exception_prefix='',
+                           check_last_layer_shape=True):
     """Normalizes inputs and targets provided by users.
 
     Users may pass data as a list of arrays, dictionary of arrays,
@@ -48,6 +49,8 @@ def standardize_input_data(data,
             the batch axis of the arrays matches the expected
             value found in `shapes`.
         exception_prefix: String prefix used for exception formatting.
+        check_last_layer_shape: Used only in MXNet backend, whether to
+            the shape of last layer
 
     # Returns
         List of standardized input arrays (one array per model input).
@@ -130,6 +133,11 @@ def standardize_input_data(data,
                     shape = shape[1:]
                 for dim, ref_dim in zip(data_shape, shape):
                     if ref_dim != dim and ref_dim:
+                        # ignore shape difference in last layer only if loss is
+                        # multi_hot_sparse_categorical_crossentropy,
+                        # last layer can only be dense or activation layer
+                        if not check_last_layer_shape and names[i].startswith(("dense", "activation")):
+                            continue
                         raise ValueError(
                             'Error when checking ' + exception_prefix +
                             ': expected ' + names[i] + ' to have shape ' +

@@ -1852,6 +1852,16 @@ class TestBackend(object):
             with pytest.raises(TypeError):
                 K.variable('', dtype='unsupported')
 
+    @pytest.mark.skipif((K.backend() != 'mxnet'),
+                        reason='Testing only for MXNet backend')
+    def test_tensor_slicing(self):
+        np_data = np.random.randn(3, 2, 3)
+        np_res = np_data[:, -1, -1]
+
+        var = K.variable(np_data, dtype=np_data.dtype)
+        res = K.eval(var[:, -1, -1])
+        assert np.array_equal(res, np_res)
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

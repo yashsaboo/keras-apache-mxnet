@@ -2,6 +2,11 @@
 from __future__ import print_function
 
 import warnings
+from collections import defaultdict
+from functools import wraps
+from numbers import Number
+from subprocess import CalledProcessError
+
 import mxnet as mx
 import numpy as np
 from subprocess import CalledProcessError
@@ -16,6 +21,8 @@ _LEARNING_PHASE = 1
 _MODEL = None
 _REENTRY = False
 NAME_SCOPE_STACK = []
+
+py_all = all
 
 
 class name_scope(object):
@@ -167,9 +174,11 @@ def cast_to_floatx(x):
 
 
 def is_sparse(tensor):
-    """
-    MXNet backend do not yet support sparse tensor operations.
-    """
+    if hasattr(tensor, 'tocoo'):
+        return True
+    elif isinstance(tensor, KerasSymbol):
+        if tensor.get_stype() == 'csr':
+            return True
     return False
 
 
@@ -194,7 +203,14 @@ def to_dense(tensor):
         False
     ```
     """
-    raise NotImplementedError('MXNet Backend: Sparse operations are not supported yet.')
+    if hasattr(tensor, 'tocoo'):
+        return tensor.toarray()
+    elif isinstance(tensor, mx.sym.Symbol):
+        return tensor.stype('default')
+    elif isinstance(tensor, KerasSymbol):
+        return eval(tensor)
+    else:
+        return tensor
 
 
 def variable(value, dtype=None, name=None, constraint=None):
@@ -239,6 +255,15 @@ def variable(value, dtype=None, name=None, constraint=None):
     if isinstance(value, KerasSymbol):
         value = eval(value)
 
+    if hasattr(value, 'tocoo'):
+        v = mx.nd.sparse.csr_matrix((value.data, value.indices, value.indptr), shape=value.shape)
+        name = _prepare_name(name, 'variable')
+        ret = _keras_variable(name, v.shape, v.dtype, 'csr', is_vector)
+        ret._keras_shape = value.shape
+        ret._uses_learning_phase = False
+        ret.bind(v)
+        return ret
+
     # MXNet backend do not support scalars
     if isinstance(value, np.ndarray) and len(value.shape) == 0:
         raise ValueError('MXNet Backend: Scalars are not supported. Provided value for variable '
@@ -247,8 +272,7 @@ def variable(value, dtype=None, name=None, constraint=None):
     dtype = _convert_string_dtype(dtype)
     name = _prepare_name(name, 'variable')
     ndarray = mx.nd.array(value, dtype=dtype)
-
-    ret = _keras_variable(name, ndarray.shape, ndarray.dtype, is_vector)
+    ret = _keras_variable(name, ndarray.shape, ndarray.dtype, 'default', is_vector)
     ret.bind(ndarray)
 
     if isinstance(value, np.ndarray):
@@ -375,9 +399,6 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
         placeholder1:[tensor=False dtype=float32]
     ```
     """
-    if sparse:
-        raise NotImplementedError('MXNet backend do not yet support sparse tensor operations.')
-
     if dtype is None:
         dtype = floatx()
 
@@ -385,12 +406,20 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     if shape is None and ndim is None:
         raise ValueError('MXNet Backend: Specify either a shape or ndim value.')
     name = _prepare_name(name, 'placeholder')
+
     if shape:
         shape = tuple([0 if dim is None else dim for dim in shape])
     else:
         shape = tuple([0 for _ in range(ndim)])
 
-    sym = _keras_variable(name, shape=shape, dtype=dtype)
+    if sparse:
+        sym = _keras_variable(name, shape=shape, dtype=dtype, stype='csr')
+        sym._keras_shape = tuple([d if d != 0 else None for d in shape])
+        sym._mxnet_placeholder = True
+        sym._uses_learning_phase = False
+        return sym
+
+    sym = _keras_variable(name, shape=shape, dtype=dtype, stype='default')
     sym._keras_shape = tuple([d if d != 0 else None for d in shape])
     sym._mxnet_placeholder = True
     sym._uses_learning_phase = False
@@ -557,12 +586,7 @@ def eval(x):
                 _MODEL._sync_weights()
             ret = x.eval().asnumpy()
         else:
-            bind_values = dfs_get_bind_values(x)
-            executor = x.symbol.simple_bind(mx.cpu(), grad_req='null')
-            for v in executor.arg_dict:
-                bind_values[v].copyto(executor.arg_dict[v])
-            outputs = executor.forward(is_train=learning_phase())
-            ret = outputs[0].asnumpy()
+            ret = _forward_pass(x)[0].asnumpy()
 
         # If the Tensor shape is (1, ) and does not have attribute "_is_vector", then, it is considered to be scalar.
         # Return the value.
@@ -695,7 +719,7 @@ def zeros_like(x, dtype=None, name=None):
                [ 0.,  0.,  0.]], dtype=float32)
     ```
     """
-    return KerasSymbol(mx.sym.zeros_like(data=x.symbol, name=name))
+    return KerasSymbol(mx.sym.zeros_like(data=x.symbol, name=_prepare_name(name, 'zeroslikeinit')))
 
 
 def ones_like(x, dtype=None, name=None):
@@ -720,16 +744,7 @@ def ones_like(x, dtype=None, name=None):
                [ 1.,  1.,  1.]], dtype=float32)
     ```
     """
-    if dtype is None:
-        dtype = x.dtype
-    else:
-        dtype = _convert_string_dtype(dtype)
-    name = _prepare_name(name, 'onelikeinit')
-    mx_shape = tuple([0 if x is None else x for x in x.shape])
-    mx_value = mx.nd.ones(shape=mx_shape, dtype=dtype)
-    k_var = _keras_variable(name=name, dtype=dtype, shape=x.shape)
-    k_var.bind(mx_value)
-    return k_var
+    return KerasSymbol(mx.sym.ones_like(data=x.symbol, name=_prepare_name(name, 'oneslikeinit')))
 
 
 def identity(x):
@@ -1184,12 +1199,16 @@ def gather(reference, indices):
 
 
 @keras_mxnet_symbol
-def embedding(data, weight, input_dim, output_dim):
+def embedding(data, weight, input_dim, output_dim, sparse_grad=False):
     # check if inputs are KerasSymbol
     if isinstance(data, KerasSymbol):
         data = data.symbol
     if isinstance(weight, KerasSymbol):
         weight = weight.symbol
+    if sparse_grad:
+        # Refer https://mxnet.incubator.apache.org/api/python/symbol/sparse.html#mxnet.symbol.sparse.Embedding
+        return KerasSymbol(mx.sym.Embedding(data, weight=weight, input_dim=input_dim, output_dim=output_dim,
+                                            sparse_grad=True))
     return KerasSymbol(mx.sym.Embedding(data, weight=weight, input_dim=input_dim, output_dim=output_dim))
 
 
@@ -2012,6 +2031,10 @@ def concatenate(tensors, axis=-1):
 
     # Returns
         A tensor.
+
+    Note:
+    - MXNet supports sparse concat only for dim=0
+    - https://mxnet.apache.org/api/python/symbol/sparse.html#mxnet.symbol.sparse.concat
     """
     if axis < 0:
         rank = ndim(tensors[0])
@@ -2020,8 +2043,9 @@ def concatenate(tensors, axis=-1):
         else:
             axis = 0
 
-    tensors = [t.symbol for t in tensors]
-    return KerasSymbol(mx.sym.concat(*tensors, dim=axis))
+    symbols = [t.symbol for t in tensors]
+
+    return KerasSymbol(mx.sym.concat(*symbols, dim=axis))
 
 
 @keras_mxnet_symbol
@@ -2036,7 +2060,7 @@ def reshape(x, shape):
         A tensor.
     """
     shape = tuple([0 if dim is None else dim for dim in shape])
-    return KerasSymbol(mx.sym.Reshape(data=x.symbol, shape=shape))
+    return KerasSymbol(mx.sym.reshape(data=x.symbol, shape=shape))
 
 
 @keras_mxnet_symbol
@@ -2431,6 +2455,25 @@ def get_value(x):
     return eval(x)
 
 
+def get_mxnet_module_arg_params(x):
+    """
+    given parameter name,
+    get the updated value from mxnet module arg_params
+    :param x: parameter values to  (e.g. kernels, bias)
+    :return: updated parameter values
+    """
+    # retrieve from bind values first, which is up to date with
+    # arg_params in mxnet module
+    if isinstance(x, KerasSymbol):
+        if x.tensor is not None:
+            if x.name in x.get_bind_values() and _MODEL is not None:
+                _MODEL._sync_weights()
+                ret = x.get_bind_values()[x.name].asnumpy()
+    else:
+        ret = eval(x)
+    return ret
+
+
 def batch_get_value(ops):
     """Returns the value of more than one tensor variable.
 
@@ -2440,7 +2483,7 @@ def batch_get_value(ops):
     # Returns
         A list of Numpy arrays.
     """
-    return [get_value(op) for op in ops]
+    return [get_mxnet_module_arg_params(op) for op in ops]
 
 
 def set_value(x, value):
@@ -2596,7 +2639,7 @@ def stop_gradient(variables):
 @keras_mxnet_symbol
 def rnn(step_function, inputs, initial_states,
         go_backwards=False, mask=None, constants=None,
-        unroll=False, input_length=None):
+        unroll=False, input_length=None, cell=None, training=None):
     """Iterates over the time dimension of a tensor.
 
     # Arguments
@@ -2649,96 +2692,434 @@ def rnn(step_function, inputs, initial_states,
 
     if len(dshape) < 3:
         raise ValueError('MXNet Backend: Input tensor should be at least 3-D')
-    if not dshape[1]:
-        raise ValueError('MXNet Backend: Unrolling requires a fixed number of time-steps.')
-
-    if not unroll and dshape[1] is None:
-        raise NotImplementedError(
-            'MXNet Backend: unroll=False '
-            'is not supported yet in RNN.\n'
-            'MXNet Backend: Does not support Variable '
-            'Length input(Samples of different length). '
-            'Please pad your input to a constant length, '
-            'provide `input_shape` and set `unroll=True`'
-            'Ex: new_x_train = keras.preprocessing.sequence.pad_sequences(old_x_train, '
-            'maxlen=MAX_LEN_OF_INPUT_SAMPLE_TYPE_INT). '
-            'More Details - '
-            'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md')  # nopep8
-
-    if not unroll and dshape[1] is not None:
-        warnings.warn('MXNet Backend: `unroll=False` is not supported yet in RNN. Since the input_shape is known, '
-                      'setting `unroll=True` and continuing the execution.'
-                      'More Details - '
-                      'https://github.com/awslabs/keras-apache-mxnet/tree/master/docs/mxnet_backend/using_rnn_with_mxnet_backend.md',   # nopep8
-                      stacklevel=2)  # nopep8
-
-    # Split the inputs across time dimension and generate the list of inputs
-    # with shape `(samples, ...)` (no time dimension)
-    inputs = list(mx.sym.split(inputs.symbol, axis=1,
-                               squeeze_axis=1, num_outputs=dshape[1]))
-
-    # Reverse the input sequence
-    if go_backwards:
-        inputs.reverse()
-
-    # Assume learning phase is a placeholder tensor.(F = test, T = train)
-    # Some Keras layers (e.g. Dropout, BatchNormalization) behave differently at
-    #  training time and testing time. You can tell whether a layer uses the
-    # "learning phase" (train/test) by printing layer.uses_learning_phase, a
-    # boolean: True if the layer has a different behavior in training mode and
-    # test mode, False otherwise.
-    global uses_learning_phase
-    uses_learning_phase = False
-
-    states = initial_states
-    outputs = []
-    prev_output = None
-
-    if mask is not None:
-        if not states:
-            raise ValueError('MXNet Backend: Initial states is not provided when masking is '
-                             'enabled.')
-        if mask.dtype != dtype:
-            mask = cast(mask, dtype)
-        # Split the mask across time dimension and generate the list of masks
-        # with shape `(samples, 1)` (no time dimension)
-        masks = list(mx.sym.split(mask.symbol, axis=1,
-                                  squeeze_axis=1, num_outputs=dshape[1]))
-        # Reverse the mask sequence
-        if go_backwards:
-            masks.reverse()
-    else:
-        masks = [None for _ in inputs]
 
     if constants is None:
         constants = []
+    # Assume learning phase is a placeholder tensor.(F = test, T = train)
+    # Some Keras layers (e.g. Dropout, BatchNormalization) behave differently at
+    #  training time and testing time. You can tell whether a layer uses the
+    # "learning phase" (train/test) by printing layer.uses_learning_phase, a
+    # boolean: True if the layer has a different behavior in training mode and
+    # test mode, False otherwise.
+    global uses_learning_phase
+    uses_learning_phase = False
 
-    # Iterate over a time step
-    for inp, msk in zip(inputs, masks):
-        last_output, new_states = step_function(KerasSymbol(inp),
-                                                states + constants)
-        if getattr(last_output, '_uses_learning_phase', False):
-            uses_learning_phase = True
-        if msk is not None:
-            new_states = [KerasSymbol(mx.sym.where(msk,
-                                                   ns.symbol,
-                                                   s.symbol))
-                          for s, ns in zip(states, new_states)]
-            # Initialize the output for first time step
-            if prev_output is None:
-                prev_output = zeros_like(last_output)
-            last_output = KerasSymbol(mx.sym.where(msk,
-                                                   last_output.symbol,
-                                                   prev_output.symbol))
-            prev_output = last_output
-        states = new_states
-        # Expand the output dimension from `(samples, output_dim)` to
-        # `(samples, 1, output_dim)` with middle axis as time dimension
-        outputs.append(mx.sym.expand_dims(last_output.symbol, axis=1))
-    # Concatenate the output across time dimension
-    outputs = mx.sym.Concat(*outputs, dim=1)
+    # for custom operations when K.rnn is directly called to operate
+    # on tensors (mostly unit tests), no cell information is provided,
+    # use unrolling by default
+    if not unroll and cell is None:
+        unroll = True
+        warnings.warn('MXNet Backend: K.rnn() is called without RNN cell information, '
+                      'using unrolling by default.')
+
+    if unroll:
+        # Split the inputs across time dimension and generate the list of inputs
+        # with shape `(samples, ...)` (no time dimension)
+        inputs = list(mx.sym.split(inputs.symbol, axis=1,
+                                   squeeze_axis=1, num_outputs=dshape[1]))
+
+        # Reverse the input sequence
+        if go_backwards:
+            inputs.reverse()
+
+        states = initial_states
+        outputs = []
+        prev_output = None
+
+        if mask is not None:
+            if not states:
+                raise ValueError('MXNet Backend: Initial states is not provided when masking is '
+                                 'enabled.')
+            if mask.dtype != dtype:
+                mask = cast(mask, dtype)
+            # Split the mask across time dimension and generate the list of masks
+            # with shape `(samples, 1)` (no time dimension)
+            masks = list(mx.sym.split(mask.symbol, axis=1,
+                                      squeeze_axis=1, num_outputs=dshape[1]))
+            # Reverse the mask sequence
+            if go_backwards:
+                masks.reverse()
+        else:
+            masks = [None for _ in inputs]
+
+        # Iterate over a time step
+        for inp, msk in zip(inputs, masks):
+            last_output, new_states = step_function(KerasSymbol(inp),
+                                                    states + constants)
+            if getattr(last_output, '_uses_learning_phase', False):
+                uses_learning_phase = True
+            if msk is not None:
+                new_states = [KerasSymbol(mx.sym.where(msk,
+                                                       ns.symbol,
+                                                       s.symbol))
+                              for s, ns in zip(states, new_states)]
+                # Initialize the output for first time step
+                if prev_output is None:
+                    prev_output = zeros_like(last_output)
+                last_output = KerasSymbol(mx.sym.where(msk,
+                                                       last_output.symbol,
+                                                       prev_output.symbol))
+                prev_output = last_output
+            states = new_states
+            # Expand the output dimension from `(samples, output_dim)` to
+            # `(samples, 1, output_dim)` with middle axis as time dimension
+            outputs.append(mx.sym.expand_dims(last_output.symbol, axis=1))
+        # Concatenate the output across time dimension
+        outputs = mx.sym.concat(*outputs, dim=1)
+    else:
+        # TODO: remove version check after mxnet 1.3.1 release
+        if mx.__version__ < '1.3.1':
+            raise NotImplementedError('unroll=False in RNN only works with MXNet 1.3.1 or newer, '
+                                      'please upgrade to latest master using: pip install --ugprade mxnet --pre')
+
+        # defining step functions for each RNN cells, implementation taken from call functions
+        # from each RNN cell class in keras.layers.recurrent
+        def _simple_rnn_cell_step(data, states):
+            # Refer to SimpleRNNCell's call function in keras.layers.recurrent
+            inputs = data[0]
+            mask = None
+            if len(data) > 1:
+                mask = data[1]
+            prev_output = states[0]
+
+            # dropout matrices for input units
+            dp_mask = None
+            # dropout matrices for recurrent units
+            rec_dp_mask = None
+            if 0 < cell.dropout < 1 and cell._dropout_mask is None:
+                dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(inputs)),
+                    cell.dropout,
+                    training=training)
+            if (0 < cell.recurrent_dropout < 1 and
+                    cell._recurrent_dropout_mask is None):
+                rec_dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(prev_output)),
+                    cell.recurrent_dropout,
+                    training=training)
+
+            if dp_mask is not None:
+                h = _dot_rnn(inputs * dp_mask.symbol, cell.kernel.symbol)
+            else:
+                h = _dot_rnn(inputs, cell.kernel.symbol)
+            if cell.bias is not None:
+                h = mx.sym.broadcast_add(h, cell.bias.symbol)
+
+            if rec_dp_mask is not None:
+                prev_output = prev_output + rec_dp_mask.symbol
+            outputs = h + _dot_rnn(prev_output, cell.recurrent_kernel.symbol)
+            if cell.activation is not None:
+                outputs = cell.activation(KerasSymbol(outputs)).symbol
+            if mask is not None:
+                outputs = mx.sym.where(mask, outputs, prev_output)
+            return outputs, [outputs]
+
+        def _lstm_cell_step(data, states):
+            # Refer to LSTMCell's call function in keras.layers.recurrent
+            inputs = data[0]
+            mask = None
+            if len(data) > 1:
+                mask = data[1]
+
+            # dropout matrices for input units
+            dp_mask = None
+            # dropout matrices for recurrent units
+            rec_dp_mask = None
+
+            if 0 < cell.dropout < 1 and cell._dropout_mask is None:
+                dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(inputs)),
+                    cell.dropout,
+                    training=training,
+                    count=4)
+            if (0 < cell.recurrent_dropout < 1 and
+                    cell._recurrent_dropout_mask is None):
+                rec_dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(states[0])),
+                    cell.recurrent_dropout,
+                    training=training,
+                    count=4)
+
+            h_tm1 = states[0]  # previous memory state
+            c_tm1 = states[1]  # previous carry state
+
+            if cell.implementation == 1:
+                if 0 < cell.dropout < 1.:
+                    inputs_i = inputs * dp_mask[0].symbol
+                    inputs_f = inputs * dp_mask[1].symbol
+                    inputs_c = inputs * dp_mask[2].symbol
+                    inputs_o = inputs * dp_mask[3].symbol
+                else:
+                    inputs_i = inputs
+                    inputs_f = inputs
+                    inputs_c = inputs
+                    inputs_o = inputs
+                x_i = _dot_rnn(inputs_i, cell.kernel_i.symbol)
+                x_f = _dot_rnn(inputs_f, cell.kernel_f.symbol)
+                x_c = _dot_rnn(inputs_c, cell.kernel_c.symbol)
+                x_o = _dot_rnn(inputs_o, cell.kernel_o.symbol)
+                if cell.use_bias:
+                    x_i = mx.sym.broadcast_add(x_i, cell.bias_i.symbol)
+                    x_f = mx.sym.broadcast_add(x_f, cell.bias_i.symbol)
+                    x_c = mx.sym.broadcast_add(x_c, cell.bias_i.symbol)
+                    x_o = mx.sym.broadcast_add(x_o, cell.bias_i.symbol)
+
+                if 0 < cell.recurrent_dropout < 1.:
+                    h_tm1_i = h_tm1 * rec_dp_mask[0].symbol
+                    h_tm1_f = h_tm1 * rec_dp_mask[1].symbol
+                    h_tm1_c = h_tm1 * rec_dp_mask[2].symbol
+                    h_tm1_o = h_tm1 * rec_dp_mask[3].symbol
+                else:
+                    h_tm1_i = h_tm1
+                    h_tm1_f = h_tm1
+                    h_tm1_c = h_tm1
+                    h_tm1_o = h_tm1
+
+                i = cell.recurrent_activation(
+                    KerasSymbol(x_i + mx.sym.dot(h_tm1_i, cell.recurrent_kernel_i.symbol))).symbol
+                f = cell.recurrent_activation(
+                    KerasSymbol(x_f + mx.sym.dot(h_tm1_f, cell.recurrent_kernel_f.symbol))).symbol
+                c = f * c_tm1 + i * cell.activation(
+                    KerasSymbol(x_c + mx.sym.dot(h_tm1_c, cell.recurrent_kernel_c.symbol))).symbol
+                o = cell.recurrent_activation(
+                    KerasSymbol(x_o + mx.sym.dot(h_tm1_o, cell.recurrent_kernel_o.symbol))).symbol
+            else:
+                if 0. < cell.dropout < 1.:
+                    inputs = inputs * dp_mask[0].symbol
+                z = _dot_rnn(inputs, cell.kernel.symbol)
+                if 0. < cell.recurrent_dropout < 1.:
+                    h_tm1 = h_tm1 * rec_dp_mask[0].symbol
+                z = z + _dot_rnn(h_tm1, cell.recurrent_kernel.symbol)
+                if cell.use_bias:
+                    z = mx.sym.broadcast_add(z, cell.bias.symbol)
+
+                z0 = mx.sym.slice_axis(z, axis=1, begin=0, end=cell.units)
+                z1 = mx.sym.slice_axis(z, axis=1, begin=cell.units, end=2 * cell.units)
+                z2 = mx.sym.slice_axis(z, axis=1, begin=2 * cell.units, end=3 * cell.units)
+                z3 = mx.sym.slice_axis(z, axis=1, begin=3 * cell.units, end=4 * cell.units)
+
+                i = cell.recurrent_activation(KerasSymbol(z0)).symbol
+                f = cell.recurrent_activation(KerasSymbol(z1)).symbol
+                c = f * c_tm1 + i * cell.activation(KerasSymbol(z2)).symbol
+                o = cell.recurrent_activation(KerasSymbol(z3)).symbol
+            h = o * cell.activation(KerasSymbol(c)).symbol
+            if mask is not None:
+                h = mx.sym.where(mask, h, h_tm1)
+                c = mx.sym.where(mask, c, c_tm1)
+            return h, [h, c]
+
+        def _gru_cell_step(data, states):
+            # Refer to GRUCell's call function in keras.layers.recurrent
+            h_tm1 = states[0]  # previous memory
+
+            inputs = data[0]
+            mask = None
+            if len(data) > 1:
+                mask = data[1]
+
+            # dropout matrices for input units
+            dp_mask = None
+            # dropout matrices for recurrent units
+            rec_dp_mask = None
+
+            if 0 < cell.dropout < 1 and cell._dropout_mask is None:
+                dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(inputs)),
+                    cell.dropout,
+                    training=training,
+                    count=3)
+            if (0 < cell.recurrent_dropout < 1 and
+                    cell._recurrent_dropout_mask is None):
+                rec_dp_mask = _generate_dropout_mask(
+                    KerasSymbol(mx.sym.ones_like(h_tm1)),
+                    cell.recurrent_dropout,
+                    training=training,
+                    count=3)
+
+            if cell.implementation == 1:
+                if 0. < cell.dropout < 1.:
+                    inputs_z = inputs * dp_mask[0].symbol
+                    inputs_r = inputs * dp_mask[1].symbol
+                    inputs_h = inputs * dp_mask[2].symbol
+                else:
+                    inputs_z = inputs
+                    inputs_r = inputs
+                    inputs_h = inputs
+
+                x_z = _dot_rnn(inputs_z, cell.kernel_z.symbol)
+                x_r = _dot_rnn(inputs_r, cell.kernel_r.symbol)
+                x_h = _dot_rnn(inputs_h, cell.kernel_h.symbol)
+                if cell.use_bias:
+                    x_z = mx.sym.broadcast_add(x_z, cell.input_bias_z.symbol)
+                    x_r = mx.sym.broadcast_add(x_r, cell.input_bias_r.symbol)
+                    x_h = mx.sym.broadcast_add(x_h, cell.input_bias_h.symbol)
+
+                if 0. < cell.recurrent_dropout < 1.:
+                    h_tm1_z = h_tm1 * rec_dp_mask[0].symbol
+                    h_tm1_r = h_tm1 * rec_dp_mask[1].symbol
+                    h_tm1_h = h_tm1 * rec_dp_mask[2].symbol
+                else:
+                    h_tm1_z = h_tm1
+                    h_tm1_r = h_tm1
+                    h_tm1_h = h_tm1
+
+                recurrent_z = _dot_rnn(h_tm1_z, cell.recurrent_kernel_z.symbol)
+                recurrent_r = _dot_rnn(h_tm1_r, cell.recurrent_kernel_r.symbol)
+                if cell.reset_after and cell.use_bias:
+                    recurrent_z = mx.sym.broadcast_add(recurrent_z, cell.recurrent_bias_z.symbol)
+                    recurrent_r = mx.sym.broadcast_add(recurrent_r, cell.recurrent_bias_r.symbol)
+
+                z = cell.recurrent_activation(KerasSymbol(x_z + recurrent_z)).symbol
+                r = cell.recurrent_activation(KerasSymbol(x_r + recurrent_r)).symbol
+
+                # reset gate applied after/before matrix multiplication
+                if cell.reset_after:
+                    recurrent_h = _dot_rnn(h_tm1_h, cell.recurrent_kernel_h.symbol)
+                    if cell.use_bias:
+                        recurrent_h = mx.sym.broadcast_add(recurrent_h, cell.recurrent_bias_h.symbol)
+                    recurrent_h = r * recurrent_h
+                else:
+                    recurrent_h = _dot_rnn(r * h_tm1_h, cell.recurrent_kernel_h.symbol)
+
+                hh = cell.activation(KerasSymbol(x_h + recurrent_h)).symbol
+            else:
+                if 0. < cell.dropout < 1.:
+                    inputs = inputs * dp_mask[0].symbol
+
+                # inputs projected by all gate matrices at once
+                matrix_x = _dot_rnn(inputs, cell.kernel.symbol)
+                if cell.use_bias:
+                    # biases: bias_z_i, bias_r_i, bias_h_i
+                    matrix_x = mx.sym.broadcast_add(matrix_x, cell.input_bias.symbol)
+
+                x_z = mx.sym.slice_axis(matrix_x, axis=1, begin=0, end=cell.units)
+                x_r = mx.sym.slice_axis(matrix_x, axis=1, begin=cell.units, end=2 * cell.units)
+                x_h = mx.sym.slice_axis(matrix_x, axis=1, begin=2 * cell.units, end=None)
+
+                if 0. < cell.recurrent_dropout < 1.:
+                    h_tm1 = h_tm1 * rec_dp_mask[0].symbol
+
+                if cell.reset_after:
+                    # hidden state projected by all gate matrices at once
+                    matrix_inner = _dot_rnn(h_tm1, cell.recurrent_kernel.symbol)
+                    if cell.use_bias:
+                        matrix_inner = mx.sym.broadcast_add(matrix_inner, cell.recurrent_bias.symbol)
+                else:
+                    # hidden state projected separately for update/reset and new
+                    matrix_inner = _dot_rnn(h_tm1,
+                                            cell.recurrent_kernel[:, :2 * cell.units].symbol)
+
+                recurrent_z = mx.sym.slice_axis(matrix_inner, axis=1, begin=0, end=cell.units)
+                recurrent_r = mx.sym.slice_axis(matrix_inner, axis=1, begin=cell.units, end=2 * cell.units)
+
+                z = cell.recurrent_activation(KerasSymbol(x_z + recurrent_z)).symbol
+                r = cell.recurrent_activation(KerasSymbol(x_r + recurrent_r)).symbol
+
+                if cell.reset_after:
+                    recurrent_h = r * mx.sym.slice_axis(matrix_inner, axis=1, begin=0, end=2 * cell.units)
+                else:
+                    recurrent_h = _dot_rnn(r * h_tm1,
+                                           cell.recurrent_kernel[:, 2 * cell.units:].symbol)
+
+                hh = cell.activation(KerasSymbol(x_h + recurrent_h)).symbol
+
+            # previous and candidate state mixed by update gate
+            h = z * h_tm1 + (1 - z) * hh
+
+            if mask is not None:
+                h = mx.sym.where(mask, h, h_tm1)
+            return h, [h]
+
+        # Reverse the input sequence
+        if go_backwards:
+            inputs = reverse(inputs, 0)
+            mask = reverse(mask, 0)
+
+        # Transpose to time-major, i.e.
+        # from (batch, time, ...) to (time, batch, ...)
+        ndim = len(inputs.shape)
+        axes = [1, 0] + list(range(2, ndim))
+        inputs = mx.sym.transpose(inputs.symbol, axes=axes)
+
+        if mask is not None:
+            if len(mask.shape) == len(dshape) - 1:
+                mask = expand_dims(mask)
+            mask = mx.sym.transpose(mask.symbol, axes=axes)
+            data = [inputs, mask]
+        else:
+            data = [inputs]
+        states = [state.symbol for state in initial_states] + [constant.symbol for constant in constants]
+
+        # using control flow operators(foreach) in MXNet if not unrolling
+        # foreach operator only take step functions with MXNet symbol as input
+        # translating step function from Keras RNN cells to pure MXNet
+        # define _step according to different type of RNN Cells
+        if 'SimpleRNNCell' in type(cell).__name__:
+            _step = _simple_rnn_cell_step
+
+        elif 'LSTMCell' in type(cell).__name__:
+            _step = _lstm_cell_step
+
+        elif 'GRUCell' in type(cell).__name__:
+            _step = _gru_cell_step
+
+        else:
+            try:
+                # try to support some custom RNN cells
+                def _step(data, states):
+                    outputs, new_states = step_function(KerasSymbol(data[0]), [KerasSymbol(state) for state in states])
+                    if getattr(outputs, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
+                    return outputs.symbol, [new_state.symbol for new_state in new_states]
+            except:
+                raise NotImplementedError('MXNet Backend: Not supported RNN Cell')
+        outputs, states = mx.symbol.contrib.foreach(_step, data, states)
+        last_output = KerasSymbol(states[0])
+        states = [KerasSymbol(state) for state in states]
+        outputs = mx.sym.transpose(outputs, axes)
+
+    outputs = KerasSymbol(outputs)
     last_output._uses_learning_phase = uses_learning_phase
-    return last_output, KerasSymbol(outputs), states
+    return last_output, outputs, states
+
+
+def _dot_rnn(x, y):
+    """
+    helper function for RNN,
+    using pure mxnet symbol for perform K.dot function
+
+    :param x: mxnet symbol, lhs of dot
+    :param y: mxnet symbol, rhs of dot
+    :return: dot of lhs and rhs
+    """
+    _, shape, _ = y.infer_shape_partial()
+    ndim_y = len(shape[0]) if shape is not None else None
+
+    if ndim_y > 2:
+        axis = list(range(ndim_y))
+        axis = [axis.pop(-2)] + axis
+        y = mx.sym.transpose(y, axes=axis)
+    return mx.sym.dot(x, y)
+
+
+def _generate_dropout_mask(ones, rate, training=None, count=1):
+    """
+    Generate dropout mask for RNN Cell step functions
+    Refer to _generate_dropout_mask in keras/layers/recurrent.py
+    """
+    def dropped_inputs():
+        return dropout(ones, rate)
+
+    if count > 1:
+        return [in_train_phase(
+            dropped_inputs,
+            ones,
+            training=training) for _ in range(count)]
+    return in_train_phase(
+        dropped_inputs,
+        ones,
+        training=training)
 
 
 @keras_mxnet_symbol
@@ -2986,6 +3367,71 @@ def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     mx_output = - mx.sym.log(mx_output, axis=axis)
     # reshape to input's shape
     return reshape(KerasSymbol(mx_output), target.shape)
+
+
+@keras_mxnet_symbol
+def multi_hot_sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
+    """Calculate Categorical crossentropy with a list of integer targets (multi-labels)
+
+    # Arguments
+        target: An integer tensor.
+        output: A tensor resulting from a softmax
+            (unless `from_logits` is True, in which
+            case `output` is expected to be the logits).
+        from_logits: Boolean, whether `output` is the
+            result of a softmax, or is a tensor of logits.
+
+    # Returns
+        Output tensor.
+
+    # Example:
+    ```
+    # refer to examples/multi_hot_sparse_categorical_crossentropy.py
+    # for a multi-label classification problem with 3 classes
+    # target with multi labels in normal categorical crossentropy
+    >>>target_dense = np.array([[0, 1, 1], [1, 0, 1], [1, 0, 0]])
+    # output from softmax remains the same format
+    >>>output = np.array([[0.1, 0.4, 0.5],
+    >>>                   [0.4, 0.2, 0.4],
+    >>>                   [0.7, 0.2, 0.1]])
+    # target with multi labels in multi_hot categorical crossentropy
+    >>>y_true_np2 = np.array([[1, 2], [0, 2],[0]])
+    ```
+    """
+    # TODO: remove version check after mxnet 1.3.1 stable release
+    if mx.__version__ < '1.3.1':
+        raise NotImplementedError('MXNet Backend: multi_hot_sparse_categorical_crossentropy only'
+                                  'works with MXNet 1.3.1 or newer, please upgrade MXNet using:'
+                                  'pip install --upgrade mxnet --pre')
+    output_dimensions = list(range(ndim(output)))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(int_shape(output)))))
+
+    mx_output = output.symbol
+    # scale predictions so that the class probabilities of each sample sum to 1
+    if from_logits:
+        mx_output = mx.sym.softmax(mx_output, axis=axis)
+    else:
+        mx_output = mx.sym.broadcast_div(mx_output, mx.sym.sum(mx_output,
+                                                               axis=axis,
+                                                               keepdims=True))
+    # clip to prevent NaN's and Inf's
+    mx_output = mx.sym.clip(mx_output, a_min=epsilon(), a_max=1.0 - epsilon())
+
+    # using control flow ops to iterate output and take target (true label)
+    _step = lambda data, _: (mx.sym.take(data[0], data[1]), [])
+    data = [mx_output, target.symbol]
+    outputs, _ = mx.symbol.contrib.foreach(_step, data, [])
+
+    # calculate loss
+    # check if target is larger than 0, remove padded labels (-1)
+    outputs = - mx.sym.sum(mx.sym.broadcast_greater_equal(target.symbol, mx.sym.zeros((1, 1))) *
+                           mx.sym.log(outputs), axis=axis)
+    return KerasSymbol(outputs)
 
 
 @keras_mxnet_symbol
@@ -3836,7 +4282,7 @@ class KerasSymbol(object):
     computation graph and binding values.
     """
 
-    def __init__(self, mxnet_symbol, neighbors=None, is_var=False):
+    def __init__(self, mxnet_symbol, stype='default', neighbors=None, is_var=False):
         if not isinstance(mxnet_symbol, mx.sym.Symbol):
             raise TypeError('MXNet Backend: Please use a MXNet Symbol to instantiate '
                             'a Keras Symbol.')
@@ -3854,6 +4300,7 @@ class KerasSymbol(object):
                 self.add_neighbor(node)
         self._bind_values = {}
         self.tensor = None
+        self._stype = stype
 
     def bind(self, data):
         if not hasattr(self, 'tensor'):
@@ -3886,6 +4333,9 @@ class KerasSymbol(object):
 
     def get_bind_values(self):
         return self._bind_values
+
+    def get_stype(self):
+        return self._stype
 
     @property
     def symbol(self):
@@ -3931,18 +4381,52 @@ class KerasSymbol(object):
         # Convert it to a tuple iterator for single dimensional bias Tensors
         if not isinstance(in_slice, (list, tuple)):
             in_slice = (in_slice,)
+
+        # MXNet sym.slice() operator does not support slicing the complete axis with '-1' indexing.
+        # See here for more details - https://github.com/awslabs/keras-apache-mxnet/issues/113
+        # This is a workaround solution, where:
+        # 1. We slice all the elements with indexing -1
+        # 2. Squeeze the axis to get the effect of slicing the complete axis.
+        # Ex: if input.shape (2,2,3) and indexing is like input[:, -1, :]
+        #     1. After step 1, result = (2,1,3)
+        #     2. After step 2, result = (2,3) which is same as Numpy and other backend behavior.
+        slice_axis = False
+        sliced_dim = [d for d in range(len(in_slice)) if in_slice[d] == -1]
         for i in in_slice:
             if isinstance(i, int):
-                begin.append(i)
-                end.append(i + 1)
+                # Want to slice the complete axis
+                if i < -1:
+                    raise NotImplementedError('MXNet Backend: Does not support slicing with < -1 indexing. Given - ', i)
+                elif i == -1:
+                    begin.append(-1)
+                    end.append(None)
+                    slice_axis = True
+                else:
+                    begin.append(i)
+                    end.append(i + 1)
             elif isinstance(i, slice):
                 assert i.step is None or i.step == 1
                 begin.append(i.start)
                 end.append(i.stop)
             else:
                 raise AttributeError('MXNet Backend: KerasSymbol __getitem__ error.')
-        return KerasSymbol(mx.sym.slice(self.symbol, begin=tuple(begin),
-                                        end=tuple(end)), neighbors=[self])
+        sliced_res = mx.sym.slice(self.symbol, begin=tuple(begin),
+                                  end=tuple(end))
+        if slice_axis:
+            num_sliced_axis = 0
+            for dim in sliced_dim:
+                sliced_res = mx.sym.squeeze(sliced_res, axis=dim - num_sliced_axis)
+                num_sliced_axis += 1
+
+        sliced_keras_symbol = KerasSymbol(sliced_res, neighbors=[self])
+
+        # MXNet does not support Scalars. To overcome that,
+        # we have introduced a logic to identify (1, ) shaped tensor as vector or scalar.
+        # See eval() function for more details.
+        # Output of slicing is always a Vector. Without this flag, eval(a tensor with (1,) shape)
+        # will be returned as Scalar.
+        sliced_keras_symbol._is_vector = True
+        return sliced_keras_symbol
 
     @keras_mxnet_symbol
     def __abs__(self):
@@ -4115,11 +4599,21 @@ def dfs_get_bind_values(node_start):
     return bind_values
 
 
-def _keras_variable(name, shape, dtype, is_vector=False, **kwargs):
+def _forward_pass(x):
+    bind_values = dfs_get_bind_values(x)
+    executor = x.symbol.simple_bind(mx.cpu(), grad_req='null')
+    for v in executor.arg_dict:
+        if v in bind_values.keys():
+            bind_values[v].copyto(executor.arg_dict[v])
+    outputs = executor.forward(is_train=learning_phase())
+    return outputs
+
+
+def _keras_variable(name, shape, dtype, stype='default', is_vector=False, **kwargs):
     if dtype is None:
         dtype = floatx()
-    v = mx.sym.Variable(name, shape=shape, dtype=dtype, **kwargs)
-    ret = KerasSymbol(v, is_var=True)
+    v = mx.sym.Variable(name, shape=shape, stype=stype, dtype=dtype, **kwargs)
+    ret = KerasSymbol(v, stype=stype, is_var=True)
 
     # MXNet does not support Scalars. Shape of a Scalar Tensor with MXNet is (1, ) instead of ().
     # This flag is used to identify Scalar Keras Variable versus a Tensor of shape (1, ) i.e., vector.
@@ -4699,6 +5193,7 @@ def get_model():
         """The `Model` class adds training & evaluation routines to a `Network`. This class extends
         keras.engine.Model to add MXNet Module to perform training and inference with MXNet backend.
         """
+
         def __init__(self, *args, **kwargs):
             if 'name' not in kwargs:
                 prefix = self.__class__.__name__.lower()
@@ -4886,9 +5381,19 @@ def get_model():
             if self._weights_dirty:
                 args, auxs = self._module.get_params()
                 for name in self._arg_names:
-                    self._args[name][:] = args[name]
+                    try:
+                        self._args[name][:] = args[name]
+                    except:
+                        # when name is not in self._args (key not found)
+                        self._args[name] = []
+                        self._args[name][:] = args[name]
                 for name in self._aux_names:
-                    self._auxs[name][:] = auxs[name]
+                    try:
+                        self._auxs[name][:] = auxs[name]
+                    except:
+                        # when name is not in self._auxs (key not found)
+                        self._auxs[name] = []
+                        self._auxs[name][:] = auxs[name]
                 self._weights_dirty = False
 
         def _set_weights(self, arg_params=None, auxs_params=None):
@@ -4920,6 +5425,7 @@ def get_model():
 
                 batch = mx.io.DataBatch(data=data, label=label, bucket_key='train',
                                         provide_data=data_shapes, provide_label=label_shapes)
+
                 self._module.forward_backward(batch)
                 self._module.update()
                 self._update(self._train_updates)
@@ -5088,6 +5594,7 @@ def get_sequential_model():
         """Linear stack of layers. This class extends keras.engine.Sequential to add MXNet Module to perform training
         and inference with MXNet backend.
         """
+
         def __init__(self, layers=None, *args, **kwargs):
             if 'name' not in kwargs:
                 prefix = self.__class__.__name__.lower()
@@ -5114,6 +5621,7 @@ def get_optimizers():
         This is required because we cannot use Keras optimizer directly as MXNet backend does not
         support symbolic optimizers.
         """
+
         def __init__(self, lr, decay):
             super(MXOptimizer, self).__init__()
             self.lr = variable(lr)
@@ -5141,6 +5649,7 @@ def get_optimizers():
             decay: float >= 0. Learning rate decay over each update.
             nesterov: boolean. Whether to apply Nesterov momentum.
         """
+
         def __init__(self, lr=0.01, momentum=0., decay=0.,
                      nesterov=False, clipnorm=None, **kwargs):
             mx.optimizer.SGD.__init__(self, learning_rate=lr, momentum=momentum, clip_gradient=clipnorm, **kwargs)
@@ -5172,6 +5681,7 @@ def get_optimizers():
         # References
             - [Adaptive Subgradient Methods for Online Learning and Stochastic Optimization](http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf)  # nopep8
         """
+
         def __init__(self, lr=0.01, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.AdaGrad.__init__(self, learning_rate=lr, eps=epsilon, clip_gradient=clipnorm, **kwargs)
             MXOptimizer.__init__(self, lr, decay)
@@ -5208,6 +5718,7 @@ def get_optimizers():
         # References
             - [Adadelta - an adaptive learning rate method](http://arxiv.org/abs/1212.5701)
         """
+
         def __init__(self, lr=1.0, rho=0.95, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.AdaDelta.__init__(self, rho=rho, epsilon=epsilon, clip_gradient=clipnorm, **kwargs)
             MXOptimizer.__init__(self, lr, decay)
@@ -5239,6 +5750,7 @@ def get_optimizers():
             - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
             - [On the Convergence of Adam and Beyond](https://openreview.net/forum?id=ryQu7f-RZ)
         """
+
         def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999,
                      epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.Adam.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2,
@@ -5269,6 +5781,7 @@ def get_optimizers():
         # References
             - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
         """
+
         def __init__(self, lr=0.002, beta_1=0.9, beta_2=0.999, decay=0., clipnorm=None,
                      epsilon=1e-8, **kwargs):
             mx.optimizer.Adamax.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2,
@@ -5304,6 +5817,7 @@ def get_optimizers():
             - [Nadam report](http://cs229.stanford.edu/proj2015/054_report.pdf)
             - [On the importance of initialization and momentum in deep learning](http://www.cs.toronto.edu/~fritz/absps/momentum.pdf)  # nopep8
         """
+
         def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=0., clipnorm=None,
                      schedule_decay=0.004, **kwargs):
             mx.optimizer.Nadam.__init__(self, learning_rate=lr, beta1=beta_1, beta2=beta_2, epsilon=epsilon,
@@ -5338,6 +5852,7 @@ def get_optimizers():
         # References
             - [rmsprop: Divide the gradient by a running average of its recent magnitude](http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf)  # nopep8
         """
+
         def __init__(self, lr=0.001, rho=0.9, epsilon=1e-8, decay=0., clipnorm=None, **kwargs):
             mx.optimizer.RMSProp.__init__(self, learning_rate=lr, gamma1=rho, epsilon=epsilon,
                                           clip_gradient=clipnorm, **kwargs)

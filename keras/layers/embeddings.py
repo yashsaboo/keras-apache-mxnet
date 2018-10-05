@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Embedding layer.
 """
 from __future__ import absolute_import
@@ -59,6 +60,10 @@ class Embedding(Layer):
             This argument is required if you are going to connect
             `Flatten` then `Dense` layers upstream
             (without it, the shape of the dense outputs cannot be computed).
+        sparse_grad: Used only for MXNet backend
+            When set to True, the gradients’s storage type is row_sparse.
+            Compute row sparse gradient in the backward calculation.
+            Refer to: https://mxnet.incubator.apache.org/api/python/symbol/sparse.html#mxnet.symbol.sparse.Embedding
 
     # Input shape
         2D tensor with shape: `(batch_size, sequence_length)`.
@@ -78,6 +83,7 @@ class Embedding(Layer):
                  embeddings_constraint=None,
                  mask_zero=False,
                  input_length=None,
+                 sparse_grad=False,
                  **kwargs):
         if 'input_shape' not in kwargs:
             if input_length:
@@ -85,7 +91,6 @@ class Embedding(Layer):
             else:
                 kwargs['input_shape'] = (None,)
         super(Embedding, self).__init__(**kwargs)
-
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.embeddings_initializer = initializers.get(embeddings_initializer)
@@ -95,6 +100,7 @@ class Embedding(Layer):
         self.mask_zero = mask_zero
         self.supports_masking = mask_zero
         self.input_length = input_length
+        self.sparse_grad = sparse_grad
 
     def build(self, input_shape):
         self.embeddings = self.add_weight(
@@ -140,7 +146,10 @@ class Embedding(Layer):
         # K.gather is not working with Embedding layer using MXNet backend
         # Refer to this issue: https://github.com/awslabs/keras-apache-mxnet/issues/63
         if K.backend() == "mxnet":
-            out = K.embedding(inputs, self.embeddings, self.input_dim, self.output_dim)
+            if self.sparse_grad:
+                out = K.embedding(inputs, self.embeddings, self.input_dim, self.output_dim, sparse_grad=self.sparse_grad)
+            else:
+                out = K.embedding(inputs, self.embeddings, self.input_dim, self.output_dim)
         else:
             out = K.gather(self.embeddings, inputs)
         return out
