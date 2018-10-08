@@ -4,7 +4,7 @@ from numpy.testing import assert_allclose
 
 from keras.layers import Input
 from keras import regularizers
-from keras.utils.test_utils import layer_test, keras_test
+from keras.utils.test_utils import layer_test
 from keras.layers import normalization
 from keras.models import Sequential, Model
 from keras import backend as K
@@ -16,7 +16,6 @@ input_4 = np.expand_dims(np.arange(10.), axis=1)
 input_shapes = [np.ones((10, 10)), np.ones((10, 10, 10))]
 
 
-@keras_test
 def test_basic_batchnorm():
     layer_test(normalization.BatchNormalization,
                kwargs={'momentum': 0.9,
@@ -28,7 +27,7 @@ def test_basic_batchnorm():
                kwargs={'momentum': 0.9,
                        'epsilon': 0.1,
                        'axis': 1},
-               input_shape=(3, 4, 2))
+               input_shape=(1, 4, 1))
     layer_test(normalization.BatchNormalization,
                kwargs={'gamma_initializer': 'ones',
                        'beta_initializer': 'ones',
@@ -45,8 +44,8 @@ def test_basic_batchnorm():
                    input_shape=(3, 4, 2, 4))
 
 
-@keras_test
 def test_batchnorm_correctness_1d():
+    np.random.seed(1337)
     model = Sequential()
     norm = normalization.BatchNormalization(input_shape=(10,), momentum=0.8)
     model.add(norm)
@@ -63,10 +62,11 @@ def test_batchnorm_correctness_1d():
     assert_allclose(out.std(), 1.0, atol=1e-1)
 
 
-@keras_test
 def test_batchnorm_correctness_2d():
+    np.random.seed(1337)
     model = Sequential()
-    norm = normalization.BatchNormalization(axis=1, input_shape=(10, 6), momentum=0.8)
+    norm = normalization.BatchNormalization(axis=1, input_shape=(10, 6),
+                                            momentum=0.8)
     model.add(norm)
     model.compile(loss='mse', optimizer='rmsprop')
 
@@ -83,15 +83,14 @@ def test_batchnorm_correctness_2d():
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
                     reason='MXNet backend uses native BatchNorm operator. Do not do updates in the model.')
-@keras_test
 def test_batchnorm_training_argument():
+    np.random.seed(1337)
     bn1 = normalization.BatchNormalization(input_shape=(10,))
     x1 = Input(shape=(10,))
     y1 = bn1(x1, training=True)
     assert bn1.updates
 
     model1 = Model(x1, y1)
-    np.random.seed(123)
     x = np.random.normal(loc=5.0, scale=10.0, size=(20, 10))
     output_a = model1.predict(x)
 
@@ -108,7 +107,6 @@ def test_batchnorm_training_argument():
     assert not bn2.updates
 
 
-@keras_test
 def test_batchnorm_mode_twice():
     # This is a regression test for issue #4881 with the old
     # batch normalization functions in the Theano backend.
@@ -122,10 +120,11 @@ def test_batchnorm_mode_twice():
     model.predict(x)
 
 
-@keras_test
 def test_batchnorm_convnet():
+    np.random.seed(1337)
     model = Sequential()
-    norm = normalization.BatchNormalization(axis=1, input_shape=(3, 4, 4), momentum=0.8)
+    norm = normalization.BatchNormalization(axis=1, input_shape=(3, 4, 4),
+                                            momentum=0.8)
     model.add(norm)
     model.compile(loss='mse', optimizer='sgd')
 
@@ -140,10 +139,10 @@ def test_batchnorm_convnet():
     assert_allclose(np.std(out, axis=(0, 2, 3)), 1.0, atol=1e-1)
 
 
-@keras_test
 @pytest.mark.skipif((K.backend() == 'theano'),
                     reason='Bug with theano backend')
 def test_batchnorm_convnet_no_center_no_scale():
+    np.random.seed(1337)
     model = Sequential()
     norm = normalization.BatchNormalization(axis=-1, center=False, scale=False,
                                             input_shape=(3, 4, 4), momentum=0.8)
@@ -161,7 +160,6 @@ def test_batchnorm_convnet_no_center_no_scale():
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
                     reason='MXNet backend uses native BatchNorm operator. Do not do updates in the model.')
-@keras_test
 def test_shared_batchnorm():
     '''Test that a BN layer can be shared
     across different data streams.
@@ -191,7 +189,6 @@ def test_shared_batchnorm():
 
 @pytest.mark.skipif((K.backend() == 'mxnet'),
                     reason='MXNet backend uses native BatchNorm operator which does updates in the model.')
-@keras_test
 def test_that_trainable_disables_updates():
     val_a = np.random.random((10, 4))
     val_out = np.random.random((10, 4))
@@ -233,7 +230,6 @@ def test_that_trainable_disables_updates():
 @pytest.mark.skipif((K.backend() == 'mxnet'),
                     reason='MXNet backend uses native BatchNorm operator which does not support'
                            'set weights outside the model.')
-@keras_test
 def test_batchnorm_trainable():
     bn_mean = 0.5
     bn_std = 10.
@@ -251,6 +247,7 @@ def test_batchnorm_trainable():
     model.compile(loss='mse', optimizer='rmsprop')
     out = model.predict(input_4)
     assert_allclose((input_4 - np.mean(input_4)) / np.std(input_4), out, atol=1e-3)
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -589,6 +589,19 @@ def any(x, axis=None, keepdims=False):
     """Bitwise reduction (logical OR).
     """
     y = T.any(x, axis=axis, keepdims=keepdims)
+    y = _set_keras_shape_for_reduction(x, y, axis, keepdims)
+    return y
+
+
+def all(x, axis=None, keepdims=False):
+    """Bitwise reduction (logical AND).
+    """
+    y = T.all(x, axis=axis, keepdims=keepdims)
+    y = _set_keras_shape_for_reduction(x, y, axis, keepdims)
+    return y
+
+
+def _set_keras_shape_for_reduction(x, y, axis, keepdims):
     if hasattr(x, '_keras_shape'):
         if axis is None:
             y._keras_shape = (1,) * len(x._keras_shape) if keepdims else (1,)
@@ -608,12 +621,6 @@ def any(x, axis=None, keepdims=False):
                     keras_shape_list = (1,)
             y._keras_shape = tuple(keras_shape_list)
     return y
-
-
-def all(x, axis=None, keepdims=False):
-    """Bitwise reduction (logical AND).
-    """
-    return T.all(x, axis=axis, keepdims=keepdims)
 
 
 def argmax(x, axis=-1):
@@ -885,13 +892,25 @@ def concatenate(tensors, axis=-1):
     if py_all([is_sparse(x) for x in tensors]):
         axis = axis % ndim(tensors[0])
         if axis == 0:
-            return th_sparse_module.basic.vstack(tensors, format='csr')
+            output = th_sparse_module.basic.vstack(tensors, format='csr')
         elif axis == 1:
-            return th_sparse_module.basic.hstack(tensors, format='csr')
+            output = th_sparse_module.basic.hstack(tensors, format='csr')
         else:
             raise ValueError('Invalid concat axis for sparse matrix:', axis)
     else:
-        return T.concatenate([to_dense(x) for x in tensors], axis=axis)
+        output = T.concatenate([to_dense(x) for x in tensors], axis=axis)
+
+    if py_all([hasattr(tensor, '_keras_shape') for tensor in tensors]):
+        input_shapes = [tensor._keras_shape for tensor in tensors]
+        output_shape = list(input_shapes[0])
+        for shape in input_shapes[1:]:
+            if output_shape[axis] is None or shape[axis] is None:
+                output_shape[axis] = None
+                break
+            output_shape[axis] += shape[axis]
+        output._keras_shape = tuple(output_shape)
+
+    return output
 
 
 def reshape(x, shape):
@@ -934,7 +953,11 @@ def repeat_elements(x, rep, axis):
     return y
 
 
-def resize_images(x, height_factor, width_factor, data_format):
+def resize_images(x,
+                  height_factor,
+                  width_factor,
+                  data_format,
+                  interpolation='nearest'):
     """Resize the images contained in a 4D tensor of shape
     - [batch, channels, height, width] (for 'channels_first' data_format)
     - [batch, height, width, channels] (for 'channels_last' data_format)
@@ -942,15 +965,39 @@ def resize_images(x, height_factor, width_factor, data_format):
     positive integers.
     """
     if data_format == 'channels_first':
-        output = repeat_elements(x, height_factor, axis=2)
-        output = repeat_elements(output, width_factor, axis=3)
-        return output
+        axis_1 = 2
+        axis_2 = 3
     elif data_format == 'channels_last':
-        output = repeat_elements(x, height_factor, axis=1)
-        output = repeat_elements(output, width_factor, axis=2)
-        return output
+        axis_1 = 1
+        axis_2 = 2
     else:
         raise ValueError('Invalid data_format:', data_format)
+
+    if interpolation == 'nearest':
+        output = repeat_elements(x, height_factor, axis=axis_1)
+        output = repeat_elements(output, width_factor, axis=axis_2)
+    elif interpolation == 'bilinear':
+        if not (height_factor == width_factor == 2):
+            raise NotImplementedError(
+                'Bilinear upscaling with factors other than (2, 2)'
+                'is not available when using the Theano backend.')
+        if data_format == 'channels_last':
+            output = permute_dimensions(x, [0, 3, 1, 2])
+        else:
+            output = x
+        output = T.nnet.abstract_conv.bilinear_upsampling(output,
+                                                          ratio=height_factor)
+        if data_format == 'channels_last':
+            output = permute_dimensions(output, [0, 2, 3, 1])
+        if hasattr(x, '_keras_shape'):
+            output._keras_shape = list(x._keras_shape)
+            output._keras_shape[axis_1] *= height_factor
+            output._keras_shape[axis_2] *= width_factor
+            output._keras_shape = tuple(output._keras_shape)
+    else:
+        raise ValueError('interpolation should be one of "nearest" or "bilinear".')
+
+    return output
 
 
 def resize_volumes(x, depth_factor, height_factor, width_factor, data_format):
@@ -1144,7 +1191,34 @@ def spatial_2d_padding(x, padding=((1, 1), (1, 1)), data_format=None):
                    py_slice(left_pad, input_shape[2] + left_pad),
                    py_slice(None))
     y = T.set_subtensor(output[indices], x)
-    y._keras_shape = output_shape
+    if hasattr(x, '_keras_shape'):
+        if data_format == 'channels_first':
+            if x._keras_shape[2] is not None:
+                h = x._keras_shape[2] + top_pad + bottom_pad
+            else:
+                h = None
+            if x._keras_shape[3] is not None:
+                w = x._keras_shape[3] + left_pad + right_pad
+            else:
+                w = None
+            output_keras_shape = (x._keras_shape[0],
+                                  x._keras_shape[1],
+                                  h,
+                                  w)
+        else:
+            if x._keras_shape[1] is not None:
+                h = x._keras_shape[1] + top_pad + bottom_pad
+            else:
+                h = None
+            if x._keras_shape[2] is not None:
+                w = x._keras_shape[2] + left_pad + right_pad
+            else:
+                w = None
+            output_keras_shape = (x._keras_shape[0],
+                                  h,
+                                  w,
+                                  x._keras_shape[3])
+        y._keras_shape = output_keras_shape
     return y
 
 
@@ -1180,7 +1254,46 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
                    py_slice(padding[1][0], input_shape[2] + padding[1][0]),
                    py_slice(padding[2][0], input_shape[3] + padding[2][0]),
                    py_slice(None))
-    return T.set_subtensor(output[indices], x)
+    y = T.set_subtensor(output[indices], x)
+    if hasattr(x, '_keras_shape'):
+        if data_format == 'channels_first':
+            if x._keras_shape[2] is not None:
+                h = x._keras_shape[2] + padding[0][0] + padding[0][1]
+            else:
+                h = None
+            if x._keras_shape[3] is not None:
+                w = x._keras_shape[3] + padding[1][0] + padding[1][1]
+            else:
+                w = None
+            if x._keras_shape[4] is not None:
+                d = x._keras_shape[4] + padding[2][0] + padding[2][1]
+            else:
+                d = None
+            output_keras_shape = (x._keras_shape[0],
+                                  x._keras_shape[1],
+                                  h,
+                                  w,
+                                  d)
+        else:
+            if x._keras_shape[1] is not None:
+                h = x._keras_shape[1] + padding[0][0] + padding[0][1]
+            else:
+                h = None
+            if x._keras_shape[2] is not None:
+                w = x._keras_shape[2] + padding[1][0] + padding[1][1]
+            else:
+                w = None
+            if x._keras_shape[3] is not None:
+                d = x._keras_shape[3] + padding[2][0] + padding[2][1]
+            else:
+                d = None
+            output_keras_shape = (x._keras_shape[0],
+                                  h,
+                                  w,
+                                  d,
+                                  x._keras_shape[4])
+        y._keras_shape = output_keras_shape
+    return y
 
 
 def stack(x, axis=0):
@@ -1594,19 +1707,35 @@ def elu(x, alpha=1.0):
     return T.nnet.elu(x, alpha)
 
 
-def relu(x, alpha=0., max_value=None):
+def relu(x, alpha=0., max_value=None, threshold=0.):
     _assert_has_capability(T.nnet, 'relu')
-    x = T.nnet.relu(x, alpha)
+
+    if alpha != 0.:
+        if threshold != 0.:
+            negative_part = T.nnet.relu(-x + threshold)
+        else:
+            negative_part = T.nnet.relu(-x)
+
+    if threshold != 0.:
+        x = x * T.cast(T.gt(x, threshold), floatx())
+    else:
+        x = T.nnet.relu(x)
+
     if max_value is not None:
-        x = T.minimum(x, max_value)
+        x = T.clip(x, 0.0, max_value)
+
+    if alpha != 0.:
+        x -= alpha * negative_part
+
     return x
 
 
 def softmax(x, axis=-1):
-    if axis == -1 or axis == x.ndim - 1:
+    if (axis == -1 or axis == x.ndim - 1) and x.ndim == 2:
         return T.nnet.softmax(x)
-    return T.exp(x - x.max()) / T.exp(
-        x - x.max()).sum(axis=axis, keepdims=True)
+    xm = x.max(axis=axis, keepdims=True)
+    return T.exp(x - xm) / T.exp(
+        x - xm).sum(axis=axis, keepdims=True)
 
 
 def softplus(x):
@@ -2009,7 +2138,7 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
 
 
 def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
-                     padding='valid', data_format=None):
+                     padding='valid', data_format=None, dilation_rate=(1, 1)):
     """2D deconvolution (transposed convolution).
 
     # Arguments
@@ -2019,7 +2148,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
         padding: string, "same" or "valid".
         data_format: "channels_last" or "channels_first".
             Whether to use Theano or TensorFlow data format
-        in inputs/kernels/outputs.
+            in inputs/kernels/outputs.
+        dilation_rate: tuple of 2 integers.
 
     # Raises
         ValueError: if using an even kernel size with padding 'same'.
@@ -2052,7 +2182,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
                                                         kshp=kernel_shape,
                                                         subsample=strides,
                                                         border_mode=th_padding,
-                                                        filter_flip=not flip_filters)
+                                                        filter_flip=not flip_filters,
+                                                        filter_dilation=dilation_rate)
     conv_out = op(kernel, x, output_shape[2:])
     conv_out = _postprocess_conv2d_output(conv_out, x, padding,
                                           kernel_shape, strides, data_format)

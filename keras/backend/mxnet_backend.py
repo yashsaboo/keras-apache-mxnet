@@ -2079,7 +2079,7 @@ def permute_dimensions(x, pattern):
 
 
 @keras_mxnet_symbol
-def resize_images(x, height_factor, width_factor, data_format):
+def resize_images(x, height_factor, width_factor, data_format, interpolation='nearest'):
     """Resizes the images contained in a 4D tensor.
 
     # Arguments
@@ -2087,6 +2087,7 @@ def resize_images(x, height_factor, width_factor, data_format):
         height_factor: Positive integer.
         width_factor: Positive integer.
         data_format: string, `"channels_last"` or `"channels_first"`.
+        interpolation: A string, one of `nearest` or `bilinear`.
 
     # Returns
         A tensor.
@@ -2464,13 +2465,12 @@ def get_mxnet_module_arg_params(x):
     """
     # retrieve from bind values first, which is up to date with
     # arg_params in mxnet module
+    ret = eval(x)
     if isinstance(x, KerasSymbol):
         if x.tensor is not None:
             if x.name in x.get_bind_values() and _MODEL is not None:
                 _MODEL._sync_weights()
                 ret = x.get_bind_values()[x.name].asnumpy()
-    else:
-        ret = eval(x)
     return ret
 
 
@@ -2771,9 +2771,9 @@ def rnn(step_function, inputs, initial_states,
         if mx.__version__ < '1.3.1':
             raise NotImplementedError('unroll=False in RNN only works with MXNet 1.3.1 or newer, '
                                       'please upgrade to latest master using: pip install --ugprade mxnet --pre')
-
         # defining step functions for each RNN cells, implementation taken from call functions
         # from each RNN cell class in keras.layers.recurrent
+
         def _simple_rnn_cell_step(data, states):
             # Refer to SimpleRNNCell's call function in keras.layers.recurrent
             inputs = data[0]
@@ -3033,7 +3033,8 @@ def rnn(step_function, inputs, initial_states,
         # Reverse the input sequence
         if go_backwards:
             inputs = reverse(inputs, 0)
-            mask = reverse(mask, 0)
+            if mask is not None:
+                mask = reverse(mask, 0)
 
         # Transpose to time-major, i.e.
         # from (batch, time, ...) to (time, batch, ...)
@@ -3218,7 +3219,7 @@ def in_test_phase(x, alt, training=None):
 
 # NN OPERATIONS
 @keras_mxnet_symbol
-def relu(x, alpha=0., max_value=None):
+def relu(x, alpha=0., max_value=None, threshold=0.):
     """Rectified linear unit.
 
     With default values, it returns element-wise `max(x, 0)`.
@@ -3231,10 +3232,32 @@ def relu(x, alpha=0., max_value=None):
     # Returns
         A tensor.
     """
-    ret = mx.sym.LeakyReLU(data=x.symbol, act_type='leaky', slope=alpha)
-    if max_value and max_value > 0:
-        ret = mx.sym.minimum(ret, max_value)
-    return KerasSymbol(ret)
+    if alpha != 0.:
+        if max_value is None and threshold == 0.:
+            return KerasSymbol(mx.sym.LeakyReLU(data=x.symbol, act_type='leaky', slope=alpha))
+
+        if threshold != 0.:
+            data = -x + threshold
+            negative_part = mx.sym.LeakyReLU(data=data.symbol, act_type='leaky', slope=0.)
+        else:
+            data = -x
+            negative_part = mx.sym.LeakyReLU(data=data.symbol, act_type='leaky', slope=0.)
+
+    clip_max = max_value is not None
+
+    if threshold != 0:
+        # computes x for x > threshold else 0
+        x = x * cast(greater(x, threshold), floatx())
+    else:
+        x = KerasSymbol(mx.sym.LeakyReLU(data=x.symbol, act_type='leaky', slope=alpha))
+
+    if clip_max:
+        x = KerasSymbol(mx.sym.clip(x.symbol, 0, max_value))
+
+    if alpha != 0:
+        negative_part = alpha * negative_part
+        x = x - KerasSymbol(negative_part)
+    return x
 
 
 @keras_mxnet_symbol
@@ -3252,7 +3275,7 @@ def elu(x, alpha=1.):
 
 
 @keras_mxnet_symbol
-def softmax(x):
+def softmax(x, axis=-1):
     """Softmax of a tensor.
 
     # Arguments
@@ -3261,7 +3284,7 @@ def softmax(x):
     # Returns
         A tensor.
     """
-    return KerasSymbol(mx.sym.softmax(data=x.symbol))
+    return KerasSymbol(mx.sym.softmax(data=x.symbol, axis=axis))
 
 
 @keras_mxnet_symbol
@@ -3671,7 +3694,7 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
 
 
 def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
-                     padding='valid', data_format=None):
+                     padding='valid', data_format=None, dilation_rate=(1, 1)):
     """2D deconvolution (i.e. transposed convolution).
 
     # Arguments
@@ -3712,7 +3735,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
     if padding not in {'same', 'valid'}:
         raise ValueError('MXNet Backend: `padding` should be either `same` or `valid`.')
 
-    return _convnd_transpose(x, kernel, output_shape, name='conv2d_transpose', strides=strides, data_format=data_format)
+    return _convnd_transpose(x, kernel, output_shape, name='conv2d_transpose',
+                             strides=strides, data_format=data_format, dilation_rate=dilation_rate)
 
 
 def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
@@ -5028,7 +5052,7 @@ def _convnd(x, kernel, strides, filter_dilation, name=None, padding_mode='valid'
 
 
 @keras_mxnet_symbol
-def _convnd_transpose(x, kernel, output_shape, strides, data_format, name=None):
+def _convnd_transpose(x, kernel, output_shape, strides, data_format, name=None, dilation_rate=(1, 1)):
     # Handle Data Format
     x = _preprocess_convnd_input(x, data_format)
     kernel = _preprocess_convnd_kernel(kernel, data_format)
@@ -5049,7 +5073,7 @@ def _convnd_transpose(x, kernel, output_shape, strides, data_format, name=None):
     deconv = mx.sym.Deconvolution(data=x.symbol, name=_prepare_name(name, "convnd_transpose"),
                                   kernel=layout_kernel, stride=strides,
                                   num_filter=nb_filter, weight=kernel.symbol,
-                                  no_bias=True, target_shape=output_shape)
+                                  no_bias=True, target_shape=output_shape, dilate=dilation_rate)
 
     # Handle original Data Format
     result = _postprocess_convnd_output(KerasSymbol(deconv), data_format)
@@ -5177,6 +5201,16 @@ def get_mxnet_model_info(model):
     data_names = pred_module.data_names
     data_shapes = pred_module.data_shapes
     return data_names, data_shapes
+
+
+def get_num_gpus():
+    try:
+        gpus = mx.test_utils.list_gpus()
+    except CalledProcessError:
+        gpus = []
+    if gpus and len(gpus) > 0:
+        return len(gpus)
+    return 0
 
 
 def get_model():
@@ -5603,6 +5637,7 @@ def get_sequential_model():
 
             self.name = kwargs['name']
             engine.Model.__init__(self, *args, **kwargs)
+            self._build_input_shape = None
 
             # Add to the model any layers passed to the constructor.
             if layers:
@@ -5632,8 +5667,10 @@ def get_optimizers():
 
         def get_config(self):
             config = {}
-            if hasattr(self, 'clip_gradient'):
-                config['clipnorm'] = self.clip_gradient
+            if hasattr(self, 'clipnorm'):
+                config['clipnorm'] = self.clipnorm
+            if hasattr(self, 'clipvalue'):
+                config['clipvalue'] = self.clipvalue
             return config
 
     class SGD(MXOptimizer, mx.optimizer.SGD):

@@ -12,6 +12,8 @@ import numpy as np
 import time
 import json
 import warnings
+import io
+import sys
 
 from collections import deque
 from collections import OrderedDict
@@ -117,9 +119,10 @@ class CallbackList(object):
         delta_t_median = np.median(self._delta_ts_batch_end)
         if (self._delta_t_batch > 0. and
            (delta_t_median > 0.95 * self._delta_t_batch and delta_t_median > 0.1)):
-            warnings.warn('Method on_batch_end() is slow compared '
-                          'to the batch update (%f). Check your callbacks.'
-                          % delta_t_median)
+            warnings.warn('In your callbacks, method `on_batch_end()` '
+                          'is slow compared to a model step '
+                          '(%f vs %f). Check your callbacks.'
+                          % (delta_t_median, self._delta_t_batch))
 
     def on_train_begin(self, logs=None):
         """Called at the beginning of training.
@@ -480,6 +483,10 @@ class EarlyStopping(Callback):
         baseline: Baseline value for the monitored quantity to reach.
             Training will stop if the model doesn't show improvement
             over the baseline.
+        restore_best_weights: whether to restore model weights from
+            the epoch with the best value of the monitored quantity.
+            If False, the model weights obtained at the last step of
+            training are used.
     """
 
     def __init__(self,
@@ -488,7 +495,8 @@ class EarlyStopping(Callback):
                  patience=0,
                  verbose=0,
                  mode='auto',
-                 baseline=None):
+                 baseline=None,
+                 restore_best_weights=False):
         super(EarlyStopping, self).__init__()
 
         self.monitor = monitor
@@ -498,6 +506,8 @@ class EarlyStopping(Callback):
         self.min_delta = min_delta
         self.wait = 0
         self.stopped_epoch = 0
+        self.restore_best_weights = restore_best_weights
+        self.best_weights = None
 
         if mode not in ['auto', 'min', 'max']:
             warnings.warn('EarlyStopping mode %s is unknown, '
@@ -530,26 +540,39 @@ class EarlyStopping(Callback):
             self.best = np.Inf if self.monitor_op == np.less else -np.Inf
 
     def on_epoch_end(self, epoch, logs=None):
-        current = logs.get(self.monitor)
+        current = self.get_monitor_value(logs)
         if current is None:
-            warnings.warn(
-                'Early stopping conditioned on metric `%s` '
-                'which is not available. Available metrics are: %s' %
-                (self.monitor, ','.join(list(logs.keys()))), RuntimeWarning
-            )
             return
+
         if self.monitor_op(current - self.min_delta, self.best):
             self.best = current
             self.wait = 0
+            if self.restore_best_weights:
+                self.best_weights = self.model.get_weights()
         else:
             self.wait += 1
             if self.wait >= self.patience:
                 self.stopped_epoch = epoch
                 self.model.stop_training = True
+                if self.restore_best_weights:
+                    if self.verbose > 0:
+                        print('Restoring model weights from the end of '
+                              'the best epoch')
+                    self.model.set_weights(self.best_weights)
 
     def on_train_end(self, logs=None):
         if self.stopped_epoch > 0 and self.verbose > 0:
             print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
+
+    def get_monitor_value(self, logs):
+        monitor_value = logs.get(self.monitor)
+        if monitor_value is None:
+            warnings.warn(
+                'Early stopping conditioned on metric `%s` '
+                'which is not available. Available metrics are: %s' %
+                (self.monitor, ','.join(list(logs.keys()))), RuntimeWarning
+            )
+        return monitor_value
 
 
 class RemoteMonitor(Callback):
@@ -559,16 +582,18 @@ class RemoteMonitor(Callback):
     Events are sent to `root + '/publish/epoch/end/'` by default. Calls are
     HTTP POST, with a `data` argument which is a
     JSON-encoded dictionary of event data.
-    If send_as_json is set to True, the content type of the request will be application/json.
-    Otherwise the serialized JSON will be send within a form
+    If send_as_json is set to True, the content type of the request will be
+    application/json. Otherwise the serialized JSON will be send within a form
 
     # Arguments
         root: String; root url of the target server.
         path: String; path relative to `root` to which the events will be sent.
-        field: String; JSON field under which the data will be stored. The field is used only if the payload is sent
-        within a form (i.e. send_as_json is set to False).
+        field: String; JSON field under which the data will be stored.
+            The field is used only if the payload is sent within a form
+            (i.e. send_as_json is set to False).
         headers: Dictionary; optional custom HTTP headers.
-        send_as_json: Boolean; whether the request should be send as application/json.
+        send_as_json: Boolean; whether the request should be send as
+            application/json.
     """
 
     def __init__(self,
@@ -640,6 +665,10 @@ class LearningRateScheduler(Callback):
             print('\nEpoch %05d: LearningRateScheduler setting learning '
                   'rate to %s.' % (epoch + 1, lr))
 
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr'] = K.get_value(self.model.optimizer.lr)
+
 
 class TensorBoard(Callback):
     """TensorBoard basic visualizations.
@@ -692,7 +721,14 @@ class TensorBoard(Callback):
         embeddings_data: data to be embedded at layers specified in
             `embeddings_layer_names`. Numpy array (if the model has a single
             input) or list of Numpy arrays (if the model has multiple inputs).
-            Learn [more about embeddings](https://www.tensorflow.org/programmers_guide/embedding)
+            Learn [more about embeddings]
+            (https://www.tensorflow.org/programmers_guide/embedding).
+        update_freq: `'batch'` or `'epoch'` or integer. When using `'batch'`, writes
+            the losses and metrics to TensorBoard after each batch. The same
+            applies for `'epoch'`. If using an integer, let's say `10000`,
+            the callback will write the metrics and losses to TensorBoard every
+            10000 samples. Note that writing too frequently to TensorBoard
+            can slow down your training.
     """
 
     def __init__(self, log_dir='./logs',
@@ -704,14 +740,16 @@ class TensorBoard(Callback):
                  embeddings_freq=0,
                  embeddings_layer_names=None,
                  embeddings_metadata=None,
-                 embeddings_data=None):
+                 embeddings_data=None,
+                 update_freq='epoch'):
         super(TensorBoard, self).__init__()
         global tf, projector
         try:
             import tensorflow as tf
             from tensorflow.contrib.tensorboard.plugins import projector
         except ImportError:
-            raise ImportError('You need the TensorFlow module installed to use TensorBoard.')
+            raise ImportError('You need the TensorFlow module installed to '
+                              'use TensorBoard.')
 
         if K.backend() != 'tensorflow':
             if histogram_freq != 0:
@@ -742,6 +780,13 @@ class TensorBoard(Callback):
         self.embeddings_metadata = embeddings_metadata or {}
         self.batch_size = batch_size
         self.embeddings_data = embeddings_data
+        if update_freq == 'batch':
+            # It is the same as writing as frequently as possible.
+            self.update_freq = 1
+        else:
+            self.update_freq = update_freq
+        self.samples_seen = 0
+        self.samples_seen_at_last_write = 0
 
     def set_model(self, model):
         self.model = model
@@ -762,7 +807,8 @@ class TensorBoard(Callback):
                         grads = [
                             grad.values if is_indexed_slices(grad) else grad
                             for grad in grads]
-                        tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+                        tf.summary.histogram('{}_grad'.format(mapped_weight_name),
+                                             grads)
                     if self.write_images:
                         w_img = tf.squeeze(weight)
                         shape = K.int_shape(w_img)
@@ -800,7 +846,8 @@ class TensorBoard(Callback):
                 if hasattr(layer, 'output'):
                     if isinstance(layer.output, list):
                         for i, output in enumerate(layer.output):
-                            tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                            tf.summary.histogram('{}_out_{}'.format(layer.name, i),
+                                                 output)
                     else:
                         tf.summary.histogram('{}_out'.format(layer.name),
                                              layer.output)
@@ -813,7 +860,8 @@ class TensorBoard(Callback):
             self.writer = tf.summary.FileWriter(self.log_dir)
 
         if self.embeddings_freq and self.embeddings_data is not None:
-            self.embeddings_data = standardize_input_data(self.embeddings_data, model.input_names)
+            self.embeddings_data = standardize_input_data(self.embeddings_data,
+                                                          model.input_names)
 
             embeddings_layer_names = self.embeddings_layer_names
 
@@ -920,8 +968,8 @@ class TensorBoard(Callback):
                     batch = slice(i, i + step)
 
                     if type(self.model.input) == list:
-                        feed_dict = {model_input: embeddings_data[idx][batch]
-                                     for idx, model_input in enumerate(self.model.input)}
+                        feed_dict = {_input: embeddings_data[idx][batch]
+                                     for idx, _input in enumerate(self.model.input)}
                     else:
                         feed_dict = {self.model.input: embeddings_data[0][batch]}
 
@@ -932,23 +980,42 @@ class TensorBoard(Callback):
 
                     self.sess.run(self.assign_embeddings, feed_dict=feed_dict)
                     self.saver.save(self.sess,
-                                    os.path.join(self.log_dir, 'keras_embedding.ckpt'),
+                                    os.path.join(self.log_dir,
+                                                 'keras_embedding.ckpt'),
                                     epoch)
 
                     i += self.batch_size
 
+        if self.update_freq == 'epoch':
+            index = epoch
+        else:
+            index = self.samples_seen
+        self._write_logs(logs, index)
+
+    def _write_logs(self, logs, index):
         for name, value in logs.items():
             if name in ['batch', 'size']:
                 continue
             summary = tf.Summary()
             summary_value = summary.value.add()
-            summary_value.simple_value = value.item()
+            if isinstance(value, np.ndarray):
+                summary_value.simple_value = value.item()
+            else:
+                summary_value.simple_value = value
             summary_value.tag = name
-            self.writer.add_summary(summary, epoch)
+            self.writer.add_summary(summary, index)
         self.writer.flush()
 
     def on_train_end(self, _):
         self.writer.close()
+
+    def on_batch_end(self, batch, logs=None):
+        if self.update_freq != 'epoch':
+            self.samples_seen += logs['size']
+            samples_seen_since = self.samples_seen - self.samples_seen_at_last_write
+            if samples_seen_since >= self.update_freq:
+                self._write_logs(logs, self.samples_seen)
+                self.samples_seen_at_last_write = self.samples_seen
 
 
 class ReduceLROnPlateau(Callback):
@@ -1063,8 +1130,8 @@ class ReduceLROnPlateau(Callback):
                         new_lr = max(new_lr, self.min_lr)
                         K.set_value(self.model.optimizer.lr, new_lr)
                         if self.verbose > 0:
-                            print('\nEpoch %05d: ReduceLROnPlateau reducing learning '
-                                  'rate to %s.' % (epoch + 1, new_lr))
+                            print('\nEpoch %05d: ReduceLROnPlateau reducing '
+                                  'learning rate to %s.' % (epoch + 1, new_lr))
                         self.cooldown_counter = self.cooldown
                         self.wait = 0
 
@@ -1099,7 +1166,12 @@ class CSVLogger(Callback):
         self.writer = None
         self.keys = None
         self.append_header = True
-        self.file_flags = 'b' if six.PY2 and os.name == 'nt' else ''
+        if six.PY2:
+            self.file_flags = 'b'
+            self._open_args = {}
+        else:
+            self.file_flags = ''
+            self._open_args = {'newline': '\n'}
         super(CSVLogger, self).__init__()
 
     def on_train_begin(self, logs=None):
@@ -1107,9 +1179,12 @@ class CSVLogger(Callback):
             if os.path.exists(self.filename):
                 with open(self.filename, 'r' + self.file_flags) as f:
                     self.append_header = not bool(len(f.readline()))
-            self.csv_file = open(self.filename, 'a' + self.file_flags)
+            mode = 'a'
         else:
-            self.csv_file = open(self.filename, 'w' + self.file_flags)
+            mode = 'w'
+        self.csv_file = io.open(self.filename,
+                                mode + self.file_flags,
+                                **self._open_args)
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
@@ -1128,14 +1203,17 @@ class CSVLogger(Callback):
 
         if self.model.stop_training:
             # We set NA so that csv parsers do not fail for this last epoch.
-            logs = dict([(k, logs[k]) if k in logs else (k, 'NA') for k in self.keys])
+            logs = dict([(k, logs[k] if k in logs else 'NA') for k in self.keys])
 
         if not self.writer:
             class CustomDialect(csv.excel):
                 delimiter = self.sep
-
+            fieldnames = ['epoch'] + self.keys
+            if six.PY2:
+                fieldnames = [unicode(x) for x in fieldnames]
             self.writer = csv.DictWriter(self.csv_file,
-                                         fieldnames=['epoch'] + self.keys, dialect=CustomDialect)
+                                         fieldnames=fieldnames,
+                                         dialect=CustomDialect)
             if self.append_header:
                 self.writer.writeheader()
 
@@ -1243,10 +1321,10 @@ class MXNetModelCheckpoint(ModelCheckpoint):
        If save_best_only is True, saves the MXNet model in the format '<prefix>-symbol.json' and '<prefix>-0000.params'.
        i.e., uses 0000 as placeholder for the epoch. You will have only one best model at the end of training.
 
-       If save_best_only is False, i.e., you want to save the MXNet model after each epoch, this callback saves the Model
-       in the format '<prefix>-symbol.json' and '<prefix>-<epoch>.params'. Example: If you are running the training job
-       for 2 epochs, you will have one symbol file - '<prefix>-symbol.json' and 2 params file, one each for the 2 epochs,
-       '<prefix>-0000.params' and '<prefix>-0001.params'
+       If save_best_only is False, i.e., you want to save the MXNet model after each epoch, this callback saves the
+       Model in the format '<prefix>-symbol.json' and '<prefix>-<epoch>.params'. Example: If you are running the
+       training job for 2 epochs, you will have one symbol file - '<prefix>-symbol.json' and 2 params file, one each
+       for the 2 epochs, '<prefix>-0000.params' and '<prefix>-0001.params'
 
        # Arguments
            prefix: Prefix name of the saved MXNet Model (symbol and params) files.

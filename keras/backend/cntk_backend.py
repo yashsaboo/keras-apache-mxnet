@@ -1156,17 +1156,20 @@ def permute_dimensions(x, pattern):
     return C.transpose(x, axis)
 
 
-def resize_images(x, height_factor, width_factor, data_format):
-    if data_format == 'channels_first':
-        output = repeat_elements(x, height_factor, axis=2)
-        output = repeat_elements(output, width_factor, axis=3)
-        return output
-    elif data_format == 'channels_last':
-        output = repeat_elements(x, height_factor, axis=1)
-        output = repeat_elements(output, width_factor, axis=2)
-        return output
+def resize_images(x, height_factor, width_factor, data_format, interpolation='nearest'):
+    if interpolation == 'nearest':
+        if data_format == 'channels_first':
+            output = repeat_elements(x, height_factor, axis=2)
+            output = repeat_elements(output, width_factor, axis=3)
+            return output
+        elif data_format == 'channels_last':
+            output = repeat_elements(x, height_factor, axis=1)
+            output = repeat_elements(output, width_factor, axis=2)
+            return output
+        else:
+            raise ValueError('CNTK Backend: Invalid data_format: %s' % data_format)
     else:
-        raise ValueError('CNTK Backend: Invalid data_format:', data_format)
+        raise NotImplementedError('CNTK only supports `nearest` interpolation.')
 
 
 def resize_volumes(x, depth_factor, height_factor, width_factor, data_format):
@@ -1181,7 +1184,7 @@ def resize_volumes(x, depth_factor, height_factor, width_factor, data_format):
         output = repeat_elements(output, width_factor, axis=3)
         return output
     else:
-        raise ValueError('CNTK Backend: Invalid data_format:', data_format)
+        raise ValueError('CNTK Backend: Invalid data_format: %s' % data_format)
 
 
 def repeat_elements(x, rep, axis):
@@ -1436,7 +1439,7 @@ def rnn(step_function, inputs, initial_states,
             for o, p in zip(new_states, place_holders):
                 n_s.append(o.replace_placeholders({p: o.output}))
             if len(n_s) > 0:
-                new_output = n_s[0]
+                new_output = n_s[-1]
             return new_output, n_s
 
         final_output, final_states = _recurrence(rnn_inputs, states, mask)
@@ -1491,17 +1494,27 @@ def conv1d(x, kernel, strides=1, padding='valid',
 
     if data_format == 'channels_last':
         x = C.swapaxes(x, 0, 1)
-        kernel = C.swapaxes(kernel, 0, 2)
+
+    # As of Keras 2.0.0, all kernels are normalized
+    # on the format `(steps, input_depth, depth)`,
+    # independently of `data_format`.
+    # CNTK expects `(depth, input_depth, steps)`.
+    kernel = C.swapaxes(kernel, 0, 2)
 
     padding = _preprocess_border_mode(padding)
-    strides = [strides]
+
+    if dev.type() == 0 and dilation_rate != 1:
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to 1. You passed: %s' % (dilation_rate,))
+
+    dilation_rate = (1, dilation_rate)
+
     x = C.convolution(
         kernel,
         x,
-        strides=tuple(strides),
-        auto_padding=[
-            False,
-            padding])
+        strides=strides,
+        auto_padding=[False, padding],
+        dilation=dilation_rate)
 
     if data_format == 'channels_last':
         x = C.swapaxes(x, 0, 1)
@@ -1515,27 +1528,20 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
     x = _preprocess_conv2d_input(x, data_format)
     kernel = _preprocess_conv2d_kernel(kernel, data_format)
     padding = _preprocess_border_mode(padding)
-    if dilation_rate == (1, 1):
-        strides = (1,) + strides
-        x = C.convolution(
-            kernel,
-            x,
-            strides,
-            auto_padding=[
-                False,
-                padding,
-                padding])
-    else:
-        assert dilation_rate[0] == dilation_rate[1]
-        assert strides == (1, 1), 'Invalid strides for dilated convolution'
-        x = C.convolution(
-            kernel,
-            x,
-            strides=dilation_rate[0],
-            auto_padding=[
-                False,
-                padding,
-                padding])
+
+    if dev.type() == 0 and dilation_rate != (1, 1):
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to (1, 1). '
+                         'You passed: %s' % (dilation_rate,))
+
+    dilation_rate = (1,) + dilation_rate
+
+    x = C.convolution(kernel,
+                      x,
+                      strides,
+                      auto_padding=[False, padding, padding],
+                      dilation=dilation_rate)
+
     return _postprocess_conv2d_output(x, data_format)
 
 
@@ -1659,17 +1665,21 @@ def conv3d(x, kernel, strides=(1, 1, 1), padding='valid',
     x = _preprocess_conv3d_input(x, data_format)
     kernel = _preprocess_conv3d_kernel(kernel, data_format)
     padding = _preprocess_border_mode(padding)
-    strides = strides + (strides[0],)
+
+    if dev.type() == 0 and dilation_rate != (1, 1, 1):
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to (1, 1, 1). '
+                         'You passed: %s' % (dilation_rate,))
+
+    dilation_rate = (1,) + dilation_rate
 
     x = C.convolution(
         kernel,
         x,
         strides,
-        auto_padding=[
-            False,
-            padding,
-            padding,
-            padding])
+        auto_padding=[False, padding, padding, padding],
+        dilation=dilation_rate)
+
     return _postprocess_conv3d_output(x, data_format)
 
 
@@ -1757,14 +1767,25 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
     return _postprocess_conv3d_output(x, data_format)
 
 
-def relu(x, alpha=0., max_value=None):
+def relu(x, alpha=0., max_value=None, threshold=0.):
+
     if alpha != 0.:
-        negative_part = C.relu(-x)
-    x = C.relu(x)
+        if threshold != 0.:
+            negative_part = C.relu(-x + threshold)
+        else:
+            negative_part = C.relu(-x)
+
+    if threshold != 0.:
+        x = x * C.greater(x, threshold)
+    else:
+        x = C.relu(x)
+
     if max_value is not None:
         x = C.clip(x, 0.0, max_value)
+
     if alpha != 0.:
         x -= alpha * negative_part
+
     return x
 
 
@@ -2187,7 +2208,7 @@ def in_top_k(predictions, targets, k):
 
 
 def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
-                     padding='valid', data_format=None):
+                     padding='valid', data_format=None, dilation_rate=(1, 1)):
     data_format = normalize_data_format(data_format)
 
     x = _preprocess_conv2d_input(x, data_format)
@@ -2201,6 +2222,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
         output_shape = transpose_shape(output_shape, 'channels_first',
                                        spatial_axes=(0, 1))
 
+    dilation_rate = (1,) + dilation_rate
+
     x = C.convolution_transpose(
         kernel,
         x,
@@ -2209,7 +2232,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
             False,
             padding,
             padding],
-        output_shape=output_shape)
+        output_shape=output_shape,
+        dilation=dilation_rate)
     return _postprocess_conv2d_output(x, data_format)
 
 

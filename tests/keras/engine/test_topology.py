@@ -8,26 +8,15 @@ from keras.engine import Input, Layer, saving, get_source_inputs
 from keras.models import Model, Sequential
 from keras import backend as K
 from keras.models import model_from_json, model_from_yaml
-from keras.utils.test_utils import keras_test
 from keras.initializers import Constant
 
 
 skipif_no_tf_gpu = pytest.mark.skipif(
-    (K.backend() != 'tensorflow') or (not K.tensorflow_backend._get_available_gpus()),
+    (K.backend() != 'tensorflow' or
+     not K.tensorflow_backend._get_available_gpus()),
     reason='Requires TensorFlow backend and a GPU')
 
 
-skipif_no_tf_gpu = pytest.mark.skipif(
-    (K.backend() != 'tensorflow') or (not K.tensorflow_backend._get_available_gpus()),
-    reason='Requires TensorFlow backend and a GPU')
-
-
-skipif_no_tf_gpu = pytest.mark.skipif(
-    (K.backend() != 'tensorflow') or (not K.tensorflow_backend._get_available_gpus()),
-    reason='Requires TensorFlow backend and a GPU')
-
-
-@keras_test
 def test_get_updates_for():
     a = Input(shape=(2,))
     dense_layer = Dense(1)
@@ -38,7 +27,6 @@ def test_get_updates_for():
     assert dense_layer.get_updates_for(None) == [1]
 
 
-@keras_test
 def test_get_losses_for():
     a = Input(shape=(2,))
     dense_layer = Dense(1)
@@ -49,7 +37,6 @@ def test_get_losses_for():
     assert dense_layer.get_losses_for(None) == [1]
 
 
-@keras_test
 def test_trainable_weights():
     a = Input(shape=(2,))
     b = Dense(1)(a)
@@ -164,7 +151,6 @@ def test_learning_phase():
     assert fn_outputs_no_dp[1].sum() != fn_outputs_dp[1].sum()
 
 
-@keras_test
 def test_layer_call_arguments():
     # Test the ability to pass and serialize arguments to `call`.
     inp = layers.Input(shape=(2,))
@@ -184,7 +170,6 @@ def test_layer_call_arguments():
     assert not model.uses_learning_phase
 
 
-@keras_test
 def test_node_construction():
     ####################################################
     # test basics
@@ -267,7 +252,6 @@ def test_node_construction():
     assert dense.get_output_mask_at(1) is None
 
 
-@keras_test
 def test_multi_input_layer():
     ####################################################
     # test multi-input layer
@@ -296,13 +280,15 @@ def test_multi_input_layer():
 
     model = Model(inputs=[a, b], outputs=[c, d], name='model')
     assert len(model.layers) == 6
-    assert model.compute_output_shape([(None, 32), (None, 32)]) == [(None, 64), (None, 5)]
+    expected_shapes = [(None, 64), (None, 5)]
+    assert model.compute_output_shape([(None, 32), (None, 32)]) == expected_shapes
     assert model.compute_mask([a, b], [None, None]) == [None, None]
-    assert model.compute_output_shape([(None, 32), (None, 32)]) == [(None, 64), (None, 5)]
+    assert model.compute_output_shape([(None, 32), (None, 32)]) == expected_shapes
 
     # we don't check names of first 2 layers (inputs) because
     # ordering of same-level layers is not fixed
-    assert [l.name for l in model.layers][2:] == ['dense_1', 'merge', 'dense_2', 'dense_3']
+    expected_names = ['dense_1', 'merge', 'dense_2', 'dense_3']
+    assert [l.name for l in model.layers][2:] == expected_names
     assert [l.name for l in model._input_layers] == ['input_a', 'input_b']
     assert [l.name for l in model._output_layers] == ['dense_2', 'dense_3']
 
@@ -321,7 +307,7 @@ def test_multi_input_layer():
     recreated_model = model_from_json(json_config)
     recreated_model.compile('rmsprop', 'mse')
 
-    assert [l.name for l in recreated_model.layers][2:] == ['dense_1', 'merge', 'dense_2', 'dense_3']
+    assert [l.name for l in recreated_model.layers][2:] == expected_names
     assert [l.name for l in recreated_model._input_layers] == ['input_a', 'input_b']
     assert [l.name for l in recreated_model._output_layers] == ['dense_2', 'dense_3']
 
@@ -332,7 +318,6 @@ def test_multi_input_layer():
     assert [x.shape for x in fn_outputs] == [(10, 64), (10, 5)]
 
 
-@keras_test
 def test_recursion():
     ####################################################
     # test recursion
@@ -368,9 +353,10 @@ def test_recursion():
 
     # we don't check names of first 2 layers (inputs) because
     # ordering of same-level layers is not fixed
+    expected_shapes = [(10, 7), (10, 64)]
     assert [layer.name for layer in final_model.layers][2:] == ['model', 'dense_4']
     assert model.compute_mask([e, f], [None, None]) == [None, None]
-    assert final_model.compute_output_shape([(10, 32), (10, 32)]) == [(10, 7), (10, 64)]
+    assert final_model.compute_output_shape([(10, 32), (10, 32)]) == expected_shapes
 
     # run recursive model
     fn = K.function(final_model.inputs, final_model.outputs)
@@ -513,9 +499,9 @@ def test_recursion():
 
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support Bidirectional')
-@keras_test
 def test_load_layers():
-    from keras.layers import ConvLSTM2D, TimeDistributed, Bidirectional, Conv2D, Input
+    from keras.layers import ConvLSTM2D, TimeDistributed
+    from keras.layers import Bidirectional, Conv2D, Input
     from keras.models import Model
 
     if K.backend() == 'tensorflow' or K.backend() == 'cntk':
@@ -523,13 +509,14 @@ def test_load_layers():
     else:
         inputs = Input(shape=(10, 1, 20, 20))
     td_conv = TimeDistributed(Conv2D(15, (5, 5)))(inputs)
-    bi_convlstm2d = Bidirectional(ConvLSTM2D(10, (3, 3)), merge_mode='concat')(td_conv)
-    model = Model(inputs=inputs, outputs=bi_convlstm2d)
+    bi_conv = Bidirectional(ConvLSTM2D(10, (3, 3)), merge_mode='concat')(td_conv)
+    model = Model(inputs=inputs, outputs=bi_conv)
 
     weight_value_tuples = []
 
     # TimeDistributed Conv2D layer
-    # use 'channels_first' data format to check that the function is being called correctly for Conv2D
+    # use 'channels_first' data format to check that
+    # the function is being called correctly for Conv2D
     # old: (filters, stack_size, kernel_rows, kernel_cols)
     # new: (kernel_rows, kernel_cols, stack_size, filters)
     weight_tensor_td_conv_old = list()
@@ -546,34 +533,35 @@ def test_load_layers():
     weight_value_tuples += zip(symbolic_weights, weight_tensor_td_conv_new)
 
     # Bidirectional ConvLSTM2D layer
-    # old ConvLSTM2D took a list of 12 weight tensors, returns a list of 3 concatenated larger tensors.
-    weight_tensor_bi_convlstm_old = []
+    # old ConvLSTM2D took a list of 12 weight tensors,
+    # returns a list of 3 concatenated larger tensors.
+    weights_bi_conv_old = []
     for j in range(2):  # bidirectional
         for i in range(4):
-            weight_tensor_bi_convlstm_old.append(np.zeros((3, 3, 15, 10)))  # kernel
-            weight_tensor_bi_convlstm_old.append(np.zeros((3, 3, 10, 10)))  # recurrent kernel
-            weight_tensor_bi_convlstm_old.append(np.zeros((10,)))  # bias
+            weights_bi_conv_old.append(np.zeros((3, 3, 15, 10)))  # kernel
+            weights_bi_conv_old.append(np.zeros((3, 3, 10, 10)))  # recurrent kernel
+            weights_bi_conv_old.append(np.zeros((10,)))  # bias
 
     bi_convlstm_layer = model.layers[2]
-    weight_tensor_bi_convlstm_new = saving.preprocess_weights_for_loading(
+    weights_bi_conv_new = saving.preprocess_weights_for_loading(
         bi_convlstm_layer,
-        weight_tensor_bi_convlstm_old,
+        weights_bi_conv_old,
         original_keras_version='1')
 
     symbolic_weights = bi_convlstm_layer.weights
-    assert (len(symbolic_weights) == len(weight_tensor_bi_convlstm_new))
-    weight_value_tuples += zip(symbolic_weights, weight_tensor_bi_convlstm_new)
+    assert (len(symbolic_weights) == len(weights_bi_conv_new))
+    weight_value_tuples += zip(symbolic_weights, weights_bi_conv_new)
 
     K.batch_set_value(weight_value_tuples)
 
     assert np.all(K.eval(model.layers[1].weights[0]) == weight_tensor_td_conv_new[0])
     assert np.all(K.eval(model.layers[1].weights[1]) == weight_tensor_td_conv_new[1])
-    assert np.all(K.eval(model.layers[2].weights[0]) == weight_tensor_bi_convlstm_new[0])
-    assert np.all(K.eval(model.layers[2].weights[1]) == weight_tensor_bi_convlstm_new[1])
-    assert np.all(K.eval(model.layers[2].weights[2]) == weight_tensor_bi_convlstm_new[2])
-    assert np.all(K.eval(model.layers[2].weights[3]) == weight_tensor_bi_convlstm_new[3])
-    assert np.all(K.eval(model.layers[2].weights[4]) == weight_tensor_bi_convlstm_new[4])
-    assert np.all(K.eval(model.layers[2].weights[5]) == weight_tensor_bi_convlstm_new[5])
+    assert np.all(K.eval(model.layers[2].weights[0]) == weights_bi_conv_new[0])
+    assert np.all(K.eval(model.layers[2].weights[1]) == weights_bi_conv_new[1])
+    assert np.all(K.eval(model.layers[2].weights[2]) == weights_bi_conv_new[2])
+    assert np.all(K.eval(model.layers[2].weights[3]) == weights_bi_conv_new[3])
+    assert np.all(K.eval(model.layers[2].weights[4]) == weights_bi_conv_new[4])
+    assert np.all(K.eval(model.layers[2].weights[5]) == weights_bi_conv_new[5])
 
 
 def convert_weights(layer, weights):
@@ -590,16 +578,16 @@ def convert_weights(layer, weights):
     return weights
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support RNN')
-@keras_test
+# MXNet does not support ConvLSTM2D yet
+# @pytest.mark.parametrize("layer", [
+#     layers.ConvLSTM2D(5, (3, 3),
+#                       input_shape=[6, 6, 6, 6],
+#                       data_format='channels_first'),
+# ], ids=['ConvLSTM2D'])
 @pytest.mark.parametrize("layer", [
     layers.GRU(2, input_shape=[3, 5]),
     layers.LSTM(2, input_shape=[3, 5]),
-    layers.ConvLSTM2D(5, (3, 3),
-                      input_shape=[6, 6, 6, 6],
-                      data_format='channels_first'),
-], ids=['GRU', 'LSTM', 'ConvLSTM2D'])
+], ids=['GRU', 'LSTM'])
 def test_preprocess_weights_for_loading(layer):
     # A model is needed to initialize weights.
     _ = Sequential([layer])
@@ -611,7 +599,6 @@ def test_preprocess_weights_for_loading(layer):
                 for (x, y) in zip(weights1, weights2)])
 
 
-@keras_test
 @pytest.mark.parametrize("layer", [
     layers.Conv2D(2, (3, 3), input_shape=[5, 5, 3]),
     layers.Conv2DTranspose(2, (5, 5),
@@ -630,18 +617,17 @@ def test_preprocess_weights_for_loading_for_model(layer):
 
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend uses native MXNet Batchnorm. To be fixed.')
-@keras_test
-@pytest.mark.parametrize('layer_class,layer_args', [
+@pytest.mark.parametrize('layer_class,args', [
     (layers.GRU, {'units': 2, 'input_shape': [3, 5]}),
     (layers.GRU, {'units': 2, 'input_shape': [3, 5], 'reset_after': True}),
     (layers.LSTM, {'units': 2, 'input_shape': [3, 5]}),
 ])
-def test_preprocess_weights_for_loading_rnn_should_be_idempotent(layer_class, layer_args):
+def test_preprocess_weights_for_loading_rnn_should_be_idempotent(layer_class, args):
     """
     Loading weights from a RNN class to itself should not convert the weights.
     """
     # layer can be instantiated only for supported backends
-    layer = layer_class(**layer_args)
+    layer = layer_class(**args)
     # A model is needed to initialize weights.
     _ = Sequential([layer])
     weights1 = layer.get_weights()
@@ -649,19 +635,18 @@ def test_preprocess_weights_for_loading_rnn_should_be_idempotent(layer_class, la
     assert all([np.allclose(x, y, 1e-5) for (x, y) in zip(weights1, weights2)])
 
 
-@keras_test
-@pytest.mark.parametrize('layer_class,layer_args', [
+@pytest.mark.parametrize('layer_class,args', [
     (layers.CuDNNGRU, {'units': 2, 'input_shape': [3, 5]}),
     (layers.CuDNNLSTM, {'units': 2, 'input_shape': [3, 5]}),
 ])
 @skipif_no_tf_gpu
-def test_preprocess_weights_for_loading_cudnn_rnn_should_be_idempotent(layer_class, layer_args):
-    test_preprocess_weights_for_loading_rnn_should_be_idempotent(layer_class, layer_args)
+def test_preprocess_weights_for_loading_cudnn_rnn_should_be_idempotent(layer_class,
+                                                                       args):
+    test_preprocess_weights_for_loading_rnn_should_be_idempotent(layer_class, args)
 
 
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend uses native MXNet Batchnorm. To be fixed.')
-@keras_test
 def test_recursion_with_bn_and_loss():
     model1 = Sequential([
         layers.Dense(5, input_dim=5, activity_regularizer='l1'),
@@ -690,7 +675,6 @@ def test_recursion_with_bn_and_loss():
 
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not fully support Embedding layer yet.')
-@keras_test
 def test_activity_regularization_with_model_composition():
 
     def reg(x):
@@ -713,14 +697,12 @@ def test_activity_regularization_with_model_composition():
     assert loss == 4
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not fully support Embedding layer yet.')
-@keras_test
 def test_shared_layer_depth_is_correct():
-    # Basic outline here: we have a shared embedding layer, and two inputs that go through
-    # different depths of computation in the graph before the final output.  We need the computed
-    # depth of the input layers to be the same, because they both pass through the embedding layer
-    # before anything else happens.  That's what we're testing.
+    # Basic outline here: we have a shared embedding layer, and two inputs that
+    # go through different depths of computation in the graph before
+    # the final output.  We need the computed depth of the input layers to be
+    # the same, because they both pass through the embedding layer before anything
+    # else happens.  That's what we're testing.
     from keras.layers import Embedding, Input, Dense, Concatenate
     from keras.models import Model
     input1 = Input(shape=(10,), name='input1')
@@ -743,7 +725,6 @@ def test_shared_layer_depth_is_correct():
     assert input1_depth == input2_depth
 
 
-@keras_test
 def test_layer_sharing_at_heterogeneous_depth():
     x_val = np.random.random((10, 5))
 
@@ -765,7 +746,6 @@ def test_layer_sharing_at_heterogeneous_depth():
     np.testing.assert_allclose(output_val, output_val_2, atol=1e-6)
 
 
-@keras_test
 def test_layer_sharing_at_heterogeneous_depth_with_concat():
     input_shape = (16, 9, 3)
     input_layer = Input(shape=input_shape)
@@ -793,39 +773,39 @@ def test_layer_sharing_at_heterogeneous_depth_with_concat():
     np.testing.assert_allclose(output_val, output_val_2, atol=1e-6)
 
 
-@keras_test
 def test_multi_output_mask():
     """Fixes #7589"""
-    class ArbitraryMultiOutputLayer(Layer):
+    class TestMultiOutputLayer(Layer):
         def __init__(self, **kwargs):
-            super(ArbitraryMultiOutputLayer, self).__init__(**kwargs)
+            super(TestMultiOutputLayer, self).__init__(**kwargs)
 
         def call(self, inputs, **kwargs):
             return [K.abs(inputs), K.abs(inputs)]
 
         def compute_output_shape(self, input_shape):
-            out_shape = super(ArbitraryMultiOutputLayer, self).compute_output_shape(input_shape)
+            out_shape = super(TestMultiOutputLayer, self).compute_output_shape(
+                input_shape)
             return [out_shape, out_shape]
 
-    class ArbitraryMultiInputLayer(Layer):
+    class TestMultiInputLayer(Layer):
         def __init__(self, **kwargs):
-            super(ArbitraryMultiInputLayer, self).__init__(**kwargs)
+            super(TestMultiInputLayer, self).__init__(**kwargs)
 
         def call(self, inputs, **kwargs):
             negative, positive = inputs
             return negative + positive
 
     input_layer = Input(shape=(16, 16, 3))
-    x, y = ArbitraryMultiOutputLayer()(input_layer)
-    z = ArbitraryMultiInputLayer()([x, y])
+    x, y = TestMultiOutputLayer()(input_layer)
+    z = TestMultiInputLayer()([x, y])
     _ = Model(inputs=input_layer, outputs=z)
     assert K.int_shape(z)[1:] == (16, 16, 3)
 
 
-@keras_test
 def test_constant_initializer_with_numpy():
     model = Sequential()
-    model.add(Dense(2, input_shape=(3,), kernel_initializer=Constant(np.ones((3, 2)))))
+    model.add(Dense(2, input_shape=(3,),
+                    kernel_initializer=Constant(np.ones((3, 2)))))
     model.add(Dense(3))
     model.compile(loss='mse', optimizer='sgd', metrics=['acc'])
 

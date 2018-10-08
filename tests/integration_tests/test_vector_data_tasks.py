@@ -1,7 +1,7 @@
 from __future__ import print_function
 import pytest
 
-from keras.utils.test_utils import get_test_data, keras_test
+from keras.utils.test_utils import get_test_data
 from keras.models import Sequential
 from keras import layers
 import keras
@@ -11,7 +11,6 @@ import keras.backend as K
 num_classes = 2
 
 
-@keras_test
 def test_vector_classification():
     '''
     Classify random float vectors into 2 classes with logistic regression
@@ -45,7 +44,6 @@ def test_vector_classification():
 
 
 @pytest.mark.skipif(K.backend() == 'mxnet', reason='MXNet backend does not support Sparse yet.')
-@keras_test
 def test_vector_classification_functional():
     (x_train, y_train), (x_test, y_test) = get_test_data(num_train=500,
                                                          num_test=200,
@@ -68,7 +66,6 @@ def test_vector_classification_functional():
     assert(history.history['val_acc'][-1] > 0.8)
 
 
-@keras_test
 def test_vector_regression():
     '''
     Perform float data prediction (regression) using 2 layer MLP
