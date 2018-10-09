@@ -422,8 +422,6 @@ def test_state_reuse_with_dropout(layer_class):
     outputs = model.predict(inputs)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support custom RNN layers yet')
 def test_minimal_rnn_cell_non_layer():
 
     class MinimalRNNCell(object):
@@ -448,19 +446,19 @@ def test_minimal_rnn_cell_non_layer():
     model.compile(optimizer='rmsprop', loss='mse')
     model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
-    # Test stacking.
-    cells = [MinimalRNNCell(8, 5),
-             MinimalRNNCell(32, 8),
-             MinimalRNNCell(32, 32)]
-    layer = recurrent.RNN(cells)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.compile(optimizer='rmsprop', loss='mse')
-    model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
+    # MXNet does not support cell stacking yet
+    if K.backend() != 'mxnet':
+        # Test stacking.
+        cells = [MinimalRNNCell(8, 5),
+                 MinimalRNNCell(32, 8),
+                 MinimalRNNCell(32, 32)]
+        layer = recurrent.RNN(cells)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.compile(optimizer='rmsprop', loss='mse')
+        model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support custom RNN layers yet')
 def test_minimal_rnn_cell_non_layer_multiple_states():
 
     class MinimalRNNCell(object):
@@ -488,20 +486,20 @@ def test_minimal_rnn_cell_non_layer_multiple_states():
     model.compile(optimizer='rmsprop', loss='mse')
     model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
-    # Test stacking.
-    cells = [MinimalRNNCell(8, 5),
-             MinimalRNNCell(16, 8),
-             MinimalRNNCell(32, 16)]
-    layer = recurrent.RNN(cells)
-    assert layer.cell.state_size == (8, 8, 16, 16, 32, 32)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.compile(optimizer='rmsprop', loss='mse')
-    model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
+    # MXNet does not support cell stacking yet
+    if K.backend() != 'mxnet':
+        # Test stacking.
+        cells = [MinimalRNNCell(8, 5),
+                 MinimalRNNCell(16, 8),
+                 MinimalRNNCell(32, 16)]
+        layer = recurrent.RNN(cells)
+        assert layer.cell.state_size == (8, 8, 16, 16, 32, 32)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.compile(optimizer='rmsprop', loss='mse')
+        model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support custom RNN layers yet')
 def test_minimal_rnn_cell_layer():
 
     class MinimalRNNCell(keras.layers.Layer):
@@ -557,32 +555,32 @@ def test_minimal_rnn_cell_layer():
     y_np_2 = model.predict(x_np)
     assert_allclose(y_np, y_np_2, atol=1e-4)
 
-    # Test stacking.
-    cells = [MinimalRNNCell(8),
-             MinimalRNNCell(12),
-             MinimalRNNCell(32)]
-    layer = recurrent.RNN(cells)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.compile(optimizer='rmsprop', loss='mse')
-    model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
+    # MXNet does not support cell stacking yet
+    if K.backend() != 'mxnet':
+        # Test stacking.
+        cells = [MinimalRNNCell(8),
+                 MinimalRNNCell(12),
+                 MinimalRNNCell(32)]
+        layer = recurrent.RNN(cells)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.compile(optimizer='rmsprop', loss='mse')
+        model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
-    # Test stacked RNN serialization.
-    x_np = np.random.random((6, 5, 5))
-    y_np = model.predict(x_np)
-    weights = model.get_weights()
-    config = layer.get_config()
-    with keras.utils.CustomObjectScope({'MinimalRNNCell': MinimalRNNCell}):
-        layer = recurrent.RNN.from_config(config)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.set_weights(weights)
-    y_np_2 = model.predict(x_np)
-    assert_allclose(y_np, y_np_2, atol=1e-4)
+        # Test stacked RNN serialization.
+        x_np = np.random.random((6, 5, 5))
+        y_np = model.predict(x_np)
+        weights = model.get_weights()
+        config = layer.get_config()
+        with keras.utils.CustomObjectScope({'MinimalRNNCell': MinimalRNNCell}):
+            layer = recurrent.RNN.from_config(config)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.set_weights(weights)
+        y_np_2 = model.predict(x_np)
+        assert_allclose(y_np, y_np_2, atol=1e-4)
 
 
-@pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support custom RNN layers yet')
 @rnn_cell_test
 def test_builtin_rnn_cell_layer(cell_class):
     # Test basic case.
@@ -606,33 +604,35 @@ def test_builtin_rnn_cell_layer(cell_class):
     y_np_2 = model.predict(x_np)
     assert_allclose(y_np, y_np_2, atol=1e-4)
 
-    # Test stacking.
-    cells = [cell_class(8),
-             cell_class(12),
-             cell_class(32)]
-    layer = recurrent.RNN(cells)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.compile(optimizer='rmsprop', loss='mse')
-    model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
+    # MXNet does not support cell stacking yet
+    if K.backend() != 'mxnet':
+        # Test stacking.
+        cells = [cell_class(8),
+                 cell_class(12),
+                 cell_class(32)]
+        layer = recurrent.RNN(cells)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.compile(optimizer='rmsprop', loss='mse')
+        model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
-    # Test stacked RNN serialization.
-    x_np = np.random.random((6, 5, 5))
-    y_np = model.predict(x_np)
-    weights = model.get_weights()
-    config = layer.get_config()
-    layer = recurrent.RNN.from_config(config)
-    y = layer(x)
-    model = keras.models.Model(x, y)
-    model.set_weights(weights)
-    y_np_2 = model.predict(x_np)
-    assert_allclose(y_np, y_np_2, atol=1e-4)
+        # Test stacked RNN serialization.
+        x_np = np.random.random((6, 5, 5))
+        y_np = model.predict(x_np)
+        weights = model.get_weights()
+        config = layer.get_config()
+        layer = recurrent.RNN.from_config(config)
+        y = layer(x)
+        model = keras.models.Model(x, y)
+        model.set_weights(weights)
+        y_np_2 = model.predict(x_np)
+        assert_allclose(y_np, y_np_2, atol=1e-4)
 
 
 @pytest.mark.skipif((K.backend() in ['cntk', 'theano']),
                     reason='Not supported.')
 @pytest.mark.skipif(K.backend() == 'mxnet',
-                    reason='MXNet backend does not support custom RNN layers yet')
+                    reason='MXNet backend does not support stacking RNN cells yet')
 def test_stacked_rnn_dropout():
     cells = [recurrent.LSTMCell(3, dropout=0.1, recurrent_dropout=0.1),
              recurrent.LSTMCell(3, dropout=0.1, recurrent_dropout=0.1)]
