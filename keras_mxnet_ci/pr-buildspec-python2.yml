@@ -29,4 +29,4 @@ phases:
       echo "Running PEP tests";
       py.test --pep8 -m pep8 -n0;
       echo "Running Keras Unit Tests and Integration Tests for all the backends";
-      py.test tests/;
+      python -m pytest tests/;
