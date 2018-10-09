@@ -1,0 +1,30 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      echo "Checking out master branch";
+      git fetch;
+      git checkout master;
+      echo "Installing MXNet";
+      apt-get update;
+      sudo apt install -y python3-pip;
+      pip3 install mxnet --pre;
+      echo "Installing Tensorflow";
+      pip3 install tensorflow;
+      echo "Installing Theano";
+      pip3 install theano;
+      pip3 install pillow;
+      sudo apt-get -y install graphviz;
+      pip3 install --upgrade graphviz;
+      pip3 install pydot;
+      pip3 install nose;
+      echo "Installing Keras from source";
+      pip3 install -e .[visualize,tests];
+
+  build:
+    commands:
+      echo "Running PEP tests";
+      py.test --pep8 -m pep8 -n0;
+      echo "Running Keras Unit Tests and Integration Tests for all the backends";
+      python3 -m pytest tests/;

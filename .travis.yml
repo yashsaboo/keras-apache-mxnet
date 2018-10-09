@@ -1,14 +1,15 @@
 sudo: required
 dist: trusty
 language: python
+cache:
+  directories:
+    - $HOME/.theano
 matrix:
     include:
         - python: 2.7
-          env: KERAS_BACKEND=tensorflow TEST_MODE=PEP8
-        - python: 2.7
           env: KERAS_BACKEND=tensorflow TEST_MODE=INTEGRATION_TESTS
         - python: 3.6
-          env: KERAS_BACKEND=tensorflow TEST_MODE=DOC
+          env: KERAS_BACKEND=tensorflow TEST_MODE=PEP8_DOC
         - python: 2.7
           env: KERAS_BACKEND=tensorflow
         - python: 3.6
@@ -21,10 +22,6 @@ matrix:
           env: KERAS_BACKEND=cntk PYTHONWARNINGS=ignore
         - python: 3.6
           env: KERAS_BACKEND=cntk PYTHONWARNINGS=ignore
-        - python: 2.7
-          env: KERAS_BACKEND=mxnet PYTHONWARNINGS=ignore
-        - python: 3.6
-          env: KERAS_BACKEND=mxnet PYTHONWARNINGS=ignore
 install:
   # code below is taken from http://conda.pydata.org/docs/travis.html
   # We do this conditionally because it saves us some downloading if the
@@ -42,40 +39,33 @@ install:
   # Useful for debugging any issues with conda
   - conda info -a
 
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION nose scipy matplotlib pandas pytest h5py
+  - travis_retry conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - pip install --only-binary=numpy,scipy numpy nose scipy matplotlib h5py theano
+  - travis_retry pip install --only-binary=numpy,scipy,pandas numpy nose scipy matplotlib h5py theano pytest pytest-pep8 pandas
   - pip install keras_applications keras_preprocessing
-  - conda install mkl mkl-service
 
   # set library path
   - export LD_LIBRARY_PATH=$HOME/miniconda/envs/test-environment/lib/:$LD_LIBRARY_PATH
 
-  # install PIL for preprocessing tests
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      conda install pil;
-    else
-      conda install Pillow;
+  # install PIL for preprocessing tests (they are integration tests).
+  - if [[ "$TEST_MODE" == "INTEGRATION_TESTS" ]] || [[ "$TEST_MODE" == "PEP8_DOC" ]]; then
+      if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+        export PIL=Pil;
+      else
+        export PIL=Pillow;
+      fi
     fi
+
+    # install pydot for visualization tests
+  - travis_retry conda install mkl mkl-service pydot graphviz $PIL
 
   - pip install -e .[tests]
 
   # install TensorFlow (CPU version).
-  - pip install tensorflow==1.7
-  
-    # install Apache MXNet (CPU version).
-  - pip install mxnet
-  - pip install --upgrade numpy
-  
-  # install cntk
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      pip install https://cntk.ai/PythonWheel/CPU-Only/cntk-2.5.1-cp27-cp27mu-linux_x86_64.whl;
-    elif [[ "$TRAVIS_PYTHON_VERSION" == "3.6" ]]; then
-      pip install https://cntk.ai/PythonWheel/CPU-Only/cntk-2.5.1-cp36-cp36m-linux_x86_64.whl;
-    fi
+  - pip install tensorflow==1.9
 
-  # install pydot for visualization tests
-  - conda install pydot graphviz
+  # install cntk
+  - pip install cntk
 
   # exclude different backends to measure a coverage for the designated backend only
   - if [[ "$KERAS_BACKEND" != "tensorflow" ]]; then
@@ -86,9 +76,6 @@ install:
     fi
   - if [[ "$KERAS_BACKEND" != "cntk" ]]; then
       echo '    keras/backend/cntk_backend.py' >> .coveragerc;
-    fi
-  - if [[ "$KERAS_BACKEND" != "mxnet" ]]; then
-      echo '    keras/backend/mxnet_backend.py' >> .coveragerc;
     fi
 
   # detect whether core files are changed or not
@@ -118,10 +105,8 @@ script:
   - echo -e "Running tests with the following config:\n$(cat ~/.keras/keras.json)"
   - if [[ "$TEST_MODE" == "INTEGRATION_TESTS" ]]; then
       PYTHONPATH=$PWD:$PYTHONPATH py.test tests/integration_tests;
-    elif [[ "$TEST_MODE" == "PEP8" ]]; then
-      PYTHONPATH=$PWD:$PYTHONPATH py.test --pep8 -m pep8 -n0;
-    elif [[ "$TEST_MODE" == "DOC" ]]; then
-      PYTHONPATH=$PWD:$PYTHONPATH py.test tests/test_documentation.py;
+    elif [[ "$TEST_MODE" == "PEP8_DOC" ]]; then
+      PYTHONPATH=$PWD:$PYTHONPATH py.test --pep8 -m pep8 -n0 && py.test tests/test_documentation.py;
     else
       PYTHONPATH=$PWD:$PYTHONPATH py.test tests/ --ignore=tests/integration_tests --ignore=tests/test_documentation.py --ignore=tests/keras/legacy/layers_test.py --cov-config .coveragerc --cov=keras tests/;
     fi

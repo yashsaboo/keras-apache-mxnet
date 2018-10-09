@@ -7,13 +7,11 @@ from keras.layers import Dense
 from keras.layers import Flatten
 from keras.models import Sequential
 from keras.utils import layer_utils
-from keras.utils.test_utils import keras_test
 
 
 @pytest.mark.skipif(K.backend() == 'mxnet', reason='Test assumes kernel in channels_last format always. MXNet backend '
                                                    'has performance optimization that changes kernel from '
                                                    '"channels_first" to "channels_last" based on image_data_format')
-@keras_test
 def test_convert_weights():
     def get_model(shape, data_format):
         model = Sequential()

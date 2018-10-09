@@ -7,7 +7,6 @@ from keras.utils import test_utils
 from keras import optimizers, Input
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Activation, Lambda
-from keras.utils.test_utils import keras_test
 from keras.utils.np_utils import to_categorical
 from keras import backend as K
 
@@ -68,7 +67,6 @@ def _test_optimizer(optimizer, target=0.75):
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 @pytest.mark.skipif((K.backend() != 'tensorflow'),
                     reason="Only Tensorflow raises a "
                            "ValueError if the gradient is null.")
@@ -80,14 +78,14 @@ def test_no_grad():
     mod = Model(inp, x)
     mod.compile('sgd', 'mse')
     with pytest.raises(ValueError):
-        mod.fit(np.zeros([10, 3]), np.zeros([10, 1], np.float32), batch_size=10, epochs=10)
+        mod.fit(np.zeros([10, 3]), np.zeros([10, 1], np.float32),
+                batch_size=10, epochs=10)
 
 
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_sgd():
     sgd = optimizers.SGD(lr=0.01, momentum=0.9, nesterov=True)
     _test_optimizer(sgd)
@@ -97,7 +95,6 @@ def test_sgd():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_rmsprop():
     _test_optimizer(optimizers.RMSprop())
     _test_optimizer(optimizers.RMSprop(decay=1e-3))
@@ -107,7 +104,6 @@ def test_rmsprop():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_adagrad():
     _test_optimizer(optimizers.Adagrad())
     _test_optimizer(optimizers.Adagrad(decay=1e-3))
@@ -117,7 +113,6 @@ def test_adagrad():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_adadelta():
     _test_optimizer(optimizers.Adadelta(), target=0.6)
     _test_optimizer(optimizers.Adadelta(decay=1e-3), target=0.6)
@@ -127,7 +122,6 @@ def test_adadelta():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_adam():
     _test_optimizer(optimizers.Adam())
     _test_optimizer(optimizers.Adam(decay=1e-3))
@@ -137,7 +131,6 @@ def test_adam():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_adamax():
     _test_optimizer(optimizers.Adamax())
     _test_optimizer(optimizers.Adamax(decay=1e-3))
@@ -147,7 +140,6 @@ def test_adamax():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_nadam():
     _test_optimizer(optimizers.Nadam())
 
@@ -155,7 +147,6 @@ def test_nadam():
 # https://github.com/deep-learning-tools/keras/issues/27
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support Adam_AMSGrad optimizer yet.')
-@keras_test
 def test_adam_amsgrad():
     _test_optimizer(optimizers.Adam(amsgrad=True))
     _test_optimizer(optimizers.Adam(amsgrad=True, decay=1e-3))
@@ -165,7 +156,6 @@ def test_adam_amsgrad():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_clipnorm():
     sgd = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=0.5)
     _test_optimizer(sgd)
@@ -175,13 +165,11 @@ def test_clipnorm():
                     reason='MXNet backend does not support constraints. '
                            'Keyword arguments such as `kernel_constraint` '
                            'and `bias_constraint`')
-@keras_test
 def test_clipvalue():
     sgd = optimizers.SGD(lr=0.01, momentum=0.9, clipvalue=0.5)
     _test_optimizer(sgd)
 
 
-@keras_test
 @pytest.mark.skipif((K.backend() != 'tensorflow'),
                     reason='Requires TensorFlow backend')
 def test_tfoptimizer():
@@ -189,7 +177,8 @@ def test_tfoptimizer():
     from tensorflow import train
     optimizer = optimizers.TFOptimizer(train.AdamOptimizer())
     model = Sequential()
-    model.add(Dense(num_classes, input_shape=(3,), kernel_constraint=constraints.MaxNorm(1)))
+    model.add(Dense(num_classes, input_shape=(3,),
+                    kernel_constraint=constraints.MaxNorm(1)))
     model.compile(loss='mean_squared_error', optimizer=optimizer)
     model.fit(np.random.random((5, 3)), np.random.random((5, num_classes)),
               epochs=1, batch_size=5, verbose=0)

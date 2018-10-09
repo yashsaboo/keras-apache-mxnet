@@ -7,6 +7,7 @@ from __future__ import print_function
 import warnings
 import numpy as np
 
+from .training_utils import iter_sequence_infinite
 from .. import backend as K
 from ..utils.data_utils import Sequence
 from ..utils.data_utils import GeneratorEnqueuer
@@ -109,19 +110,22 @@ def fit_generator(model,
                 # Create an Enqueuer that can be reused
                 val_data = validation_data
                 if isinstance(val_data, Sequence):
-                    val_enqueuer = OrderedEnqueuer(val_data,
-                                                   use_multiprocessing=use_multiprocessing)
-                    validation_steps = len(val_data)
+                    val_enqueuer = OrderedEnqueuer(
+                        val_data,
+                        use_multiprocessing=use_multiprocessing)
+                    validation_steps = validation_steps or len(val_data)
                 else:
-                    val_enqueuer = GeneratorEnqueuer(val_data,
-                                                     use_multiprocessing=use_multiprocessing)
+                    val_enqueuer = GeneratorEnqueuer(
+                        val_data,
+                        use_multiprocessing=use_multiprocessing)
                 val_enqueuer.start(workers=workers,
                                    max_queue_size=max_queue_size)
                 val_enqueuer_gen = val_enqueuer.get()
             elif val_gen:
                 val_data = validation_data
                 if isinstance(val_data, Sequence):
-                    val_enqueuer_gen = iter(val_data)
+                    val_enqueuer_gen = iter_sequence_infinite(val_data)
+                    validation_steps = validation_steps or len(val_data)
                 else:
                     val_enqueuer_gen = val_data
             else:
@@ -160,7 +164,7 @@ def fit_generator(model,
             output_generator = enqueuer.get()
         else:
             if is_sequence:
-                output_generator = iter(generator)
+                output_generator = iter_sequence_infinite(generator)
             else:
                 output_generator = generator
 
@@ -315,7 +319,7 @@ def evaluate_generator(model, generator,
             output_generator = enqueuer.get()
         else:
             if is_sequence:
-                output_generator = iter(generator)
+                output_generator = iter_sequence_infinite(generator)
             else:
                 output_generator = generator
 
@@ -420,7 +424,7 @@ def predict_generator(model, generator,
             output_generator = enqueuer.get()
         else:
             if is_sequence:
-                output_generator = iter(generator)
+                output_generator = iter_sequence_infinite(generator)
             else:
                 output_generator = generator
 

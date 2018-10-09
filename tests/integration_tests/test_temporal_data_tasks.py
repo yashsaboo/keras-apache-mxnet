@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import string
 
-from keras.utils.test_utils import get_test_data, keras_test
+from keras.utils.test_utils import get_test_data
 from keras.utils.np_utils import to_categorical
 from keras.models import Sequential
 from keras import layers, optimizers
@@ -14,7 +14,6 @@ import keras
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support unroll=False '
                            'in RNN yet.')
-@keras_test
 def test_temporal_classification():
     '''
     Classify temporal sequences of float numbers
@@ -50,7 +49,6 @@ def test_temporal_classification():
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support unroll=False '
                            'in RNN yet.')
-@keras_test
 def test_temporal_classification_functional():
     '''
     Classify temporal sequences of float numbers
@@ -83,7 +81,6 @@ def test_temporal_classification_functional():
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support unroll=False '
                            'in RNN yet.')
-@keras_test
 def test_temporal_regression():
     '''
     Predict float numbers (regression) based on sequences
@@ -104,7 +101,6 @@ def test_temporal_regression():
     assert(history.history['loss'][-1] < 1.)
 
 
-@keras_test
 def test_3d_to_3d():
     '''
     Apply a same Dense layer for each element of time dimension of the input
@@ -121,7 +117,7 @@ def test_3d_to_3d():
 
     model = Sequential()
     model.add(layers.TimeDistributed(
-        layers.Dense(y_train.shape[-1]), input_shape=(x_train.shape[1], x_train.shape[2])))
+        layers.Dense(y_train.shape[-1]), input_shape=x_train.shape[1:3]))
     model.compile(loss='hinge', optimizer='rmsprop')
     history = model.fit(x_train, y_train, epochs=20, batch_size=16,
                         validation_data=(x_test, y_test), verbose=0)
@@ -131,21 +127,24 @@ def test_3d_to_3d():
 @pytest.mark.skipif(K.backend() == 'mxnet',
                     reason='MXNet backend does not support unroll=False '
                            'in RNN yet.')
-@keras_test
 def test_stacked_lstm_char_prediction():
     '''
     Learn alphabetical char sequence with stacked LSTM.
     Predict the whole alphabet based on the first two letters ('ab' -> 'ab...z')
     See non-toy example in examples/lstm_text_generation.py
     '''
-    # generate alphabet: http://stackoverflow.com/questions/16060899/alphabet-range-python
+    # generate alphabet:
+    # http://stackoverflow.com/questions/16060899/alphabet-range-python
     alphabet = string.ascii_lowercase
     number_of_chars = len(alphabet)
 
-    # generate char sequences of length 'sequence_length' out of alphabet and store the next char as label (e.g. 'ab'->'c')
+    # generate char sequences of length 'sequence_length' out of alphabet and
+    # store the next char as label (e.g. 'ab'->'c')
     sequence_length = 2
-    sentences = [alphabet[i: i + sequence_length] for i in range(len(alphabet) - sequence_length)]
-    next_chars = [alphabet[i + sequence_length] for i in range(len(alphabet) - sequence_length)]
+    sentences = [alphabet[i: i + sequence_length]
+                 for i in range(len(alphabet) - sequence_length)]
+    next_chars = [alphabet[i + sequence_length]
+                  for i in range(len(alphabet) - sequence_length)]
 
     # Transform sequences and labels into 'one-hot' encoding
     x = np.zeros((len(sentences), sequence_length, number_of_chars), dtype=np.bool)
@@ -157,7 +156,8 @@ def test_stacked_lstm_char_prediction():
 
     # learn the alphabet with stacked LSTM
     model = Sequential([
-        layers.LSTM(16, return_sequences=True, input_shape=(sequence_length, number_of_chars)),
+        layers.LSTM(16, return_sequences=True,
+                    input_shape=(sequence_length, number_of_chars)),
         layers.LSTM(16, return_sequences=False),
         layers.Dense(number_of_chars, activation='softmax')
     ])
@@ -180,7 +180,6 @@ def test_stacked_lstm_char_prediction():
     assert(generated == alphabet)
 
 
-@keras_test
 def test_masked_temporal():
     '''
     Confirm that even with masking on both inputs and outputs, cross-entropies are
@@ -193,20 +192,22 @@ def test_masked_temporal():
     The ground-truth best cross-entropy loss should, then be -log(0.5) = 0.69
 
     '''
+    np.random.seed(1338)
+
     model = Sequential()
     model.add(layers.Embedding(10, 10, mask_zero=True))
     model.add(layers.Activation('softmax'))
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam')
 
-    x = np.random.random_integers(1, 9, (20000, 10))
+    x = np.random.randint(1, 10, size=(20000, 10))
     for rowi in range(x.shape[0]):
-        padding = np.random.random_integers(x.shape[1] / 2)
+        padding = np.random.randint(0, x.shape[1] / 2 + 1)
         x[rowi, :padding] = 0
 
     # 50% of the time the correct output is the input.
     # The other 50% of the time it's 2 * input % 10
-    y = (x * np.random.random_integers(1, 2, x.shape)) % 10
+    y = (x * np.random.randint(1, 3, size=x.shape)) % 10
     ys = np.zeros((y.size, 10), dtype='int32')
     for i, target in enumerate(y.flat):
         ys[i, target] = 1
@@ -220,7 +221,6 @@ def test_masked_temporal():
 
 @pytest.mark.skipif(K.backend() != 'tensorflow' and K.backend() != 'mxnet',
                     reason='Requires TensorFlow or MXNet backend')
-@keras_test
 def test_embedding_with_clipnorm():
     model = Sequential()
     model.add(layers.Embedding(input_dim=1, output_dim=1))

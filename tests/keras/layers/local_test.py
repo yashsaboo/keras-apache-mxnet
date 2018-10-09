@@ -1,7 +1,6 @@
 import pytest
 
 from keras.utils.test_utils import layer_test
-from keras.utils.test_utils import keras_test
 from keras.layers import local
 from keras import backend as K
 
@@ -10,7 +9,6 @@ pytestmark = pytest.mark.skipif(K.backend() == 'mxnet',
                                 reason='MXNet backend does not support local_conv1d/2d yet.')
 
 
-@keras_test
 def test_locallyconnected_1d():
     num_samples = 2
     num_steps = 8
@@ -31,7 +29,6 @@ def test_locallyconnected_1d():
                input_shape=(num_samples, num_steps, input_dim))
 
 
-@keras_test
 def test_locallyconnected_2d():
     num_samples = 5
     filters = 3

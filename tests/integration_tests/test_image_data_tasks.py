@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy as np
 import pytest
 
-from keras.utils.test_utils import get_test_data, keras_test
+from keras.utils.test_utils import get_test_data
 from keras.models import Sequential
 from keras import layers
 from keras.utils.np_utils import to_categorical
@@ -12,7 +12,6 @@ pytestmark = pytest.mark.skipif(K.backend() == 'mxnet',
                                 reason='MXNet backend does not support Pooling2d with SAME mode yet.')
 
 
-@keras_test
 def test_image_classification():
     np.random.seed(1337)
     input_shape = (16, 16, 3)
