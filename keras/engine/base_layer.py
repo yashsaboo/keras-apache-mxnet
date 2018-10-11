@@ -226,7 +226,8 @@ class Layer(object):
                    initializer=None,
                    regularizer=None,
                    trainable=True,
-                   constraint=None):
+                   constraint=None,
+                   sparse_weight=False):
         """Adds a weight variable to the layer.
 
         # Arguments
@@ -239,6 +240,8 @@ class Layer(object):
                 be trained via backprop or not (assuming
                 that the layer itself is also trainable).
             constraint: An optional Constraint instance.
+            sparse_weight: Used with MXNet backend for setting
+                sparse weight during training.
 
         # Returns
             The created weight variable.
@@ -246,10 +249,20 @@ class Layer(object):
         initializer = initializers.get(initializer)
         if dtype is None:
             dtype = K.floatx()
-        weight = K.variable(initializer(shape),
-                            dtype=dtype,
-                            name=name,
-                            constraint=constraint)
+
+        # Use sparse weight only with MXNet Backend
+        if K.backend() == 'mxnet':
+            weight = K.variable(initializer(shape),
+                                dtype=dtype,
+                                name=name,
+                                constraint=constraint,
+                                sparse_weight=sparse_weight)
+        else:
+            weight = K.variable(initializer(shape),
+                                dtype=dtype,
+                                name=name,
+                                constraint=constraint)
+
         if regularizer is not None:
             with K.name_scope('weight_regularizer'):
                 self.add_loss(regularizer(weight))

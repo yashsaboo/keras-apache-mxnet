@@ -5,6 +5,7 @@ import tempfile
 import numpy as np
 from numpy.testing import assert_allclose
 from numpy.testing import assert_raises
+from scipy.sparse import rand
 
 from keras import backend as K
 from keras.engine.saving import preprocess_weights_for_loading
@@ -112,6 +113,30 @@ def test_functional_model_saving():
     assert_allclose(out, out2, atol=1e-05)
 
 
+def test_functional_model_saving_with_sparse():
+    inputs = Input(shape=(3,), sparse=True)
+    x = Dense(2)(inputs)
+    outputs = Dense(3)(x)
+
+    model = Model(inputs, outputs)
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.Adam(),
+                  metrics=[metrics.categorical_accuracy])
+    x = rand(1, 3, density=0.2, format='csr')
+    y = np.random.random((1, 3))
+    model.train_on_batch(x, y)
+
+    out = model.predict(x)
+    _, fname = tempfile.mkstemp('.h5')
+    save_model(model, fname)
+
+    model = load_model(fname)
+    os.remove(fname)
+
+    out2 = model.predict(x)
+    assert_allclose(out, out2, atol=1e-05)
+
+
 def test_model_saving_to_pre_created_h5py_file():
     inputs = Input(shape=(3,))
     x = Dense(2)(inputs)
@@ -149,6 +174,36 @@ def test_model_saving_to_pre_created_h5py_file():
     assert_allclose(out, out2, atol=1e-05)
 
 
+def test_model_saving_to_pre_created_h5py_file_with_sparse_input():
+    inputs = Input(shape=(3,), sparse=True)
+    x = Dense(2)(inputs)
+    outputs = Dense(3)(x)
+
+    model = Model(inputs, outputs)
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.Adam(),
+                  metrics=[metrics.categorical_accuracy])
+    x = rand(1, 3, density=0.2, format='csr')
+    y = np.random.random((1, 3))
+    model.train_on_batch(x, y)
+
+    out = model.predict(x)
+    _, fname = tempfile.mkstemp('.h5')
+    with h5py.File(fname, mode='r+') as h5file:
+        save_model(model, h5file)
+        loaded_model = load_model(h5file)
+        out2 = loaded_model.predict(x)
+    assert_allclose(out, out2, atol=1e-05)
+
+    # test non-default options in h5
+    with h5py.File('does not matter', driver='core',
+                   backing_store=False) as h5file:
+        save_model(model, h5file)
+        loaded_model = load_model(h5file)
+        out2 = loaded_model.predict(x)
+    assert_allclose(out, out2, atol=1e-05)
+
+
 def test_model_saving_to_binary_stream():
     inputs = Input(shape=(3,))
     x = Dense(2)(inputs)
@@ -159,6 +214,47 @@ def test_model_saving_to_binary_stream():
                   optimizer=optimizers.Adam(),
                   metrics=[metrics.categorical_accuracy])
     x = np.random.random((1, 3))
+    y = np.random.random((1, 3))
+    model.train_on_batch(x, y)
+
+    out = model.predict(x)
+    _, fname = tempfile.mkstemp('.h5')
+    with h5py.File(fname, mode='r+') as h5file:
+        save_model(model, h5file)
+        loaded_model = load_model(h5file)
+        out2 = loaded_model.predict(x)
+    assert_allclose(out, out2, atol=1e-05)
+
+    # Save the model to an in-memory-only h5 file.
+    with h5py.File('does not matter', driver='core',
+                   backing_store=False) as h5file:
+        save_model(model, h5file)
+        h5file.flush()  # Very important! Otherwise you get all zeroes below.
+        binary_data = h5file.fid.get_file_image()
+
+        # Make sure the binary data is correct by saving it to a file manually
+        # and then loading it the usual way.
+        with open(fname, 'wb') as raw_file:
+            raw_file.write(binary_data)
+
+    # Load the manually-saved binary data, and make sure the model is intact.
+    with h5py.File(fname, mode='r') as h5file:
+        loaded_model = load_model(h5file)
+        out2 = loaded_model.predict(x)
+
+    assert_allclose(out, out2, atol=1e-05)
+
+
+def test_model_saving_to_binary_stream_with_sparse_input():
+    inputs = Input(shape=(3,), sparse=True)
+    x = Dense(2)(inputs)
+    outputs = Dense(3)(x)
+
+    model = Model(inputs, outputs)
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.Adam(),
+                  metrics=[metrics.categorical_accuracy])
+    x = rand(1, 3, density=0.2, format='csr')
     y = np.random.random((1, 3))
     model.train_on_batch(x, y)
 
@@ -884,6 +980,43 @@ def test_sequential_lstm_mxnet_model_saving():
 
 @pytest.mark.skipif((K.backend() != 'mxnet'),
                     reason='Supported for MXNet backend only.')
+def test_sequential_lstm_mxnet_model_saving_with_sparse_embedding():
+    max_features = 1000
+    maxlen = 80
+    batch_size = 32
+
+    model = Sequential()
+    model.add(Embedding(max_features, 128, input_length=maxlen, sparse_grad=True))
+    model.add(LSTM(128))
+
+    model.compile(loss='binary_crossentropy',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    # Generate sparse random data
+    x = rand(1000, maxlen, density=0.2, format='csr')
+    y = np.random.random((1000, 128))
+    print("X shape - ", x.shape)
+    print("Y shape - ", y.shape)
+    model.fit(x, y, batch_size=batch_size, epochs=2)
+
+    save_mxnet_model(model, prefix='test_lstm', epoch=0)
+
+    # Import with MXNet and try to perform inference
+    import mxnet as mx
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test_lstm', epoch=0)
+    mod = mx.mod.Module(symbol=sym, data_names=['/embedding_1_input1'], context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[('/embedding_1_input1', (1, 80))], label_shapes=mod._label_shapes)
+    mod.set_params(arg_params, aux_params, allow_missing=True)
+    data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 80))], label=None, batch_size=1)
+    mod.predict(data_iter)
+
+    os.remove('test_lstm-symbol.json')
+    os.remove('test_lstm-0000.params')
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
 def test_sequential_mxnet_model_saving():
     model = Sequential()
     model.add(Dense(2, input_shape=(3,)))
@@ -895,6 +1028,34 @@ def test_sequential_mxnet_model_saving():
                   sample_weight_mode='temporal')
     x = np.random.random((1, 3))
     y = np.random.random((1, 3, 3))
+    model.train_on_batch(x, y)
+
+    data_names, _ = save_mxnet_model(model, prefix='test', epoch=0)
+
+    # Import with MXNet and try to perform inference
+    import mxnet as mx
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test', epoch=0)
+    mod = mx.mod.Module(symbol=sym, data_names=data_names, context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[(data_names[0], (1, 3))], label_shapes=mod._label_shapes)
+    mod.set_params(arg_params, aux_params, allow_missing=True)
+    data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 3))], label=None, batch_size=1)
+    mod.predict(data_iter)
+
+    os.remove('test-symbol.json')
+    os.remove('test-0000.params')
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason='Supported for MXNet backend only.')
+def test_sequential_mxnet_model_saving_with_sparse_input():
+    model = Sequential()
+    model.add(Dense(3, input_shape=(3,)))
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.RMSprop(lr=0.0001),
+                  metrics=[metrics.categorical_accuracy])
+
+    x = rand(1, 3, density=0.2, format='csr')
+    y = np.random.random((1, 3))
     model.train_on_batch(x, y)
 
     data_names, _ = save_mxnet_model(model, prefix='test', epoch=0)
@@ -986,6 +1147,33 @@ def test_functional_model_get_mxnet_model_info():
                   optimizer=optimizers.Adam(),
                   metrics=[metrics.categorical_accuracy])
     x = np.random.random((1, 3))
+    y = np.random.random((1, 3))
+    model.train_on_batch(x, y)
+
+    data_names, data_shapes = K.get_mxnet_model_info(model)
+
+    # Only one input
+    assert len(data_names) == 1
+    # Example data_names = ['/dense_8_input1']
+    assert data_names[0].startswith('/input_')
+
+    # Example data_shape = [DataDesc[/dense_8_input1,(1, 3),float32,NCHW]]
+    assert len(data_shapes) == 1
+    assert data_shapes[0].name == data_names[0]
+    # In this example, we are passing x as input with shape (1,3)
+    assert data_shapes[0].shape == (1, 3)
+
+
+def test_functional_model_get_mxnet_model_info_sparse_input():
+    inputs = Input(shape=(3,), sparse=True)
+    x = Dense(2)(inputs)
+    outputs = Dense(3)(x)
+
+    model = Model(inputs, outputs)
+    model.compile(loss=losses.MSE,
+                  optimizer=optimizers.Adam(),
+                  metrics=[metrics.categorical_accuracy])
+    x = rand(1, 3, density=0.2, format='csr')
     y = np.random.random((1, 3))
     model.train_on_batch(x, y)
 

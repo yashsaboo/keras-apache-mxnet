@@ -10,6 +10,7 @@ from keras.utils.test_utils import layer_test
 from keras import regularizers
 from keras import constraints
 from keras.layers import deserialize as deserialize_layer
+from scipy import rand
 
 
 def test_masking():
@@ -284,6 +285,24 @@ def test_lambda_output_shape():
     layer_test(layers.Lambda,
                kwargs={'function': lambda x: K.mean(x, axis=-1)},
                input_shape=(3, 2, 4))
+
+
+@pytest.mark.skipif((K.backend() != 'mxnet'),
+                    reason="Sparse weight with dense layer supported only with MXNet backend.")
+def test_dense_with_sparse_weight():
+    layer_test(layers.Dense,
+               kwargs={'units': 3, 'sparse_weight': True},
+               input_shape=(3, 2),
+               )
+
+    def test_model_with_sparse_weight():
+        x = layers.Input(shape=(3,), sparse=True)
+        y = layers.Dense(2, sparse_weight=True)(x)
+        model = Model(input=x, output=y)
+        model.compile('rmsprop', 'mse')
+
+        z = rand(2, 3, density=0.2, format='csr')
+        model.predict(z)
 
 
 def test_dense():
