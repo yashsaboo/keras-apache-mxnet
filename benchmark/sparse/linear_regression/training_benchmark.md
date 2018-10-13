@@ -23,7 +23,7 @@
 |-----|-----|-----|-----|-----|
 | C5.8XLarge |   0  | 64  | 715.4 sec | 676.6 sec
 | C5.8XLarge |   0  | 128 | 346.2 sec | 341.1 sec 
-| C5.8XLarge |   0  | 256 | 168.9 sec | 165.5
+| C5.8XLarge |   0  | 256 | 168.9 sec | 165.5 sec
 | C5.8XLarge |   0  | 512 | 89.3 sec | 83.8 sec 
 | C5.8XLarge |   0  | 1024 | 50.5 sec | 48.6 sec
 
@@ -98,8 +98,7 @@
 | P3.8XLarge |  4  | 1024 | 969.9 | Not supported
 
 ### Note
-For reproducing above results start time before invoking model.fit()
-Run the file as `python run_sparse_benchmark.py`
+Run the file as `python run_sparse_benchmark.py`, by default the benchmark runs for `training` with `10 epochs` and batch size of `512`
 
 ### References
 MXNet supports sparse data in 2 NDArray formats - CSRNDArray and RowSparseNDArray which are defined in `mxnet.ndarray.sparse` package

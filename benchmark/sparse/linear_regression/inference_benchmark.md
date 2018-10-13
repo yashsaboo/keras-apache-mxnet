@@ -72,8 +72,7 @@
 | P3.8XLarge |   1  | 1024 | 987.7 | 16135.5
 
 ### Note
-For reproducing above results start time before invoking model.predict()
-Run the file as `python run_sparse_benchmark.py`
+Run the file as `python run_sparse_benchmark.py`, by default the benchmark runs for `training` with `10 epochs` and batch size of `512`
 
 ### References
 MXNet supports sparse data in 2 NDArray formats - CSRNDArray and RowSparseNDArray which are defined in `mxnet.ndarray.sparse` package
