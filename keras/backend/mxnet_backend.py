@@ -2786,7 +2786,7 @@ def rnn(step_function, inputs, initial_states,
         # TODO: remove version check after mxnet 1.3.1 release
         if mx.__version__ < '1.3.1':
             raise NotImplementedError('unroll=False in RNN only works with MXNet 1.3.1 or newer, '
-                                      'please upgrade to latest master using: pip install --ugprade mxnet --pre')
+                                      'please upgrade to latest master using: pip install --upgrade mxnet --pre')
         # defining step functions for each RNN cells, implementation taken from call functions
         # from each RNN cell class in keras.layers.recurrent
 

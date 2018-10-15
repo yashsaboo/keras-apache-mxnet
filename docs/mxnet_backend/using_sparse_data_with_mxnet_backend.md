@@ -34,6 +34,18 @@ output = Dense(units=1, activation='linear', sparse_weight=True)(input)
 Using sparse weight is useful in models where we need to invoke 
 [dot operation](https://mxnet.incubator.apache.org/api/python/ndarray/sparse.html#mxnet.ndarray.sparse.dot) for training.
 In this code, setting sparse_weight to `True` will create a `row_sparse` tensor that will be used internally.
+### Sparse operators
+We have added sparse support for the following operators with MXNet backend:
+* sum
+* mean
+* dot
+* concat
+* Embedding
+For using Embedding layer with sparse data, we need to set flag `sparse_grad` to True
+```python
+embedding=Embedding(max_features, 128, input_length=10, sparse_grad=True)
+```
+Please see release notes for v2.2.4.1 for further details
 ## Slice sparse data
 As MXNet sparse arrays do not support reshape operation, it is essential to be able to slice the data for training the 
 model.
