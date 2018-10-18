@@ -12,16 +12,24 @@ end-to-end model.
 MXNet supports sparse data in 2 formats - [CSRNDArray](https://mxnet.incubator.apache.org/tutorials/sparse/csr.html) & 
 [RowSparseNDArray](https://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html). 
 
-With Keras-MXNet you can use sparse tensors as follows:
-```python
-from keras.layers import Input
-sparse_tensor = Input(shape=(3,), sparse=True)
-```
-Another route is by using Keras placeholder:
+Use placeholder `sparse=True`:
 ```python
 from keras import backend as K
 sparse_tensor = K.placeholder((2, 2), sparse=True)
 ```
+Use Input layer for configuring sparse input in [functional model](https://keras.io/getting-started/functional-api-guide/):
+```python
+from keras.layers import Input
+sparse_tensor = Input(shape=(2, 2), sparse=True)
+```
+With [sequential model](https://keras.io/models/sequential/) sparse tensor can be used as:
+```python
+from keras.models import Sequential
+from keras.layers import InputLayer
+model = Sequential()
+model.add(InputLayer(input_shape=(2, 2), sparse=True))
+```
+
 Both of the above code snippets will create a sparse tensor that will bind the data in `csr` format
 
 ### Sparse weight
