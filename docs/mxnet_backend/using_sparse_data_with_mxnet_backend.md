@@ -83,8 +83,9 @@ x_train = data_utils.prepare_sliced_sparse_data(x_train, batch_size)
 ```
 This will slice the training data into shape `(992,1000)`
 Now we can continue training the data without any issue
+
 To summarize, all you have to do is to call `keras.data_utils.prepare_sliced_sparse_data()` and pass the 
-sparse training data
+sparse training data.
 ## References
 1. [MXNet Sparse NDArray Implementation](https://mxnet.incubator.apache.org/_modules/mxnet/ndarray/sparse.html)
 2. [Refer sparse linear regression model for further details](https://github.com/awslabs/keras-apache-mxnet/tree/master/benchmark/sparse/linear_regression)
