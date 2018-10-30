@@ -17,13 +17,13 @@
 
 #### CPU
 ##### Speed
-| Instance Type | GPUs  | Batch Size  | Keras-MXNet Time/Batch) | Keras-TensorFlow Time/Batch)  |
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Samples/Sec) | Keras-TensorFlow (Samples/Sec)  |
 |-----|-----|-----|-----|-----|
-| C5.8XLarge |   0  | 64  | 1.4 sec | 1.3 sec
-| C5.8XLarge |   0  | 128 | 0.9 sec | 0.7 sec 
-| C5.8XLarge |   0  | 256 | 0.6 sec | 0.5 sec
-| C5.8XLarge |   0  | 512 | 0.4 sec | 0.4 sec 
-| C5.8XLarge |   0  | 1024 | 0.3 sec | 0.3 sec
+| C5.8XLarge |   0  | 64  | 71K | 77K
+| C5.8XLarge |   0  | 128 | 111K | 143K
+| C5.8XLarge |   0  | 256 | 166K | 200K
+| C5.8XLarge |   0  | 512 | 250K | 250K
+| C5.8XLarge |   0  | 1024 | 333K | 333K
 
 #### Memory Consumed
 | Instance Type | GPUs  | Batch Size | Keras-MXNet (MB) | Keras-TensorFlow (MB)  |
@@ -45,13 +45,13 @@
 
 ##### Single GPU
 ##### Speed
-| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Time/Batch) | Keras-TensorFlow Time/Batch)  |
+| Instance Type | GPUs  | Batch Size  | Keras-MXNet (Samples/Sec) | Keras-TensorFlow (Samples/Sec)  |
 |-----|-----|-----|-----|-----|
-| P3.8XLarge |   1  | 64  | 3.0 sec | 2.0 sec
-| P3.8XLarge |   1  | 128 | 2.3 sec | 1.2 sec 
-| P3.8XLarge |   1  | 256 | 1.2 sec | 0.7 sec
-| P3.8XLarge |   1  | 512 | 0.8 sec | 0.5 sec
-| P3.8XLarge |   1  | 1024 | 0.4 sec | 0.4 sec
+| P3.8XLarge |   1  | 64  | 33K | 50K
+| P3.8XLarge |   1  | 128 | 43K | 83K 
+| P3.8XLarge |   1  | 256 | 83K | 143K
+| P3.8XLarge |   1  | 512 | 125K | 200K
+| P3.8XLarge |   1  | 1024 |250K | 250K
 
 ##### GPU Utilization
 | Instance Type | GPUs  | Batch Size | Keras-MXNet (GPU Utilization %) | Keras-TensorFlow (GPU Utilization %)  |
@@ -73,6 +73,7 @@
 
 ### Note
 Run the file as `python run_sparse_benchmark.py`, by default the benchmark runs for `training` with `10 epochs` and batch size of `512`
+Inference results have been rounded to the nearest 1000th value and in the above numbers, `K` represents `1000`, so `1K=1000`
 
 ### References
 MXNet supports sparse data in 2 NDArray formats - CSRNDArray and RowSparseNDArray which are defined in `mxnet.ndarray.sparse` package
