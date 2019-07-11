@@ -2,10 +2,6 @@
 from __future__ import print_function
 
 import warnings
-from collections import defaultdict
-from functools import wraps
-from numbers import Number
-from subprocess import CalledProcessError
 
 import mxnet as mx
 import numpy as np
@@ -21,6 +17,8 @@ _LEARNING_PHASE = 1
 _MODEL = None
 _REENTRY = False
 NAME_SCOPE_STACK = []
+
+_CURRENT_SCOPE_CTX = None
 
 py_all = all
 
@@ -5227,6 +5225,103 @@ def get_num_gpus():
     return 0
 
 
+def _get_mxnet_context(context):
+    # If we are currently under a global scope context,
+    # then it overrides all other local context parameters.
+    global _CURRENT_SCOPE_CTX
+    # Note: _CURRENT_SCOPE_CTX will be None if not in scope.
+    if _CURRENT_SCOPE_CTX:
+        return _CURRENT_SCOPE_CTX
+
+    mxnet_context = []
+
+    if context is None:
+        # If user does not provide any context, if GPUs are detected, by default it runs on first available
+        # GPU device. If not GPUs are detected, then it falls back to CPU.
+        try:
+            gpus = mx.test_utils.list_gpus()
+        except CalledProcessError:
+            gpus = []
+        if gpus and len(gpus) > 0:
+            mxnet_context.append(mx.gpu(gpus[0]))
+        else:
+            mxnet_context.append(mx.current_context())
+    elif isinstance(context, Number):
+        # If user provides number of GPUs to use, set context accordingly.
+        if context == 0:
+            mxnet_context.append(mx.current_context())
+        else:
+            for gpu_id in range(0, context):
+                mxnet_context.append(mx.gpu(gpu_id))
+    elif isinstance(context, str):
+        # If user provides GPU context in the format - "gpu(0)" or "eia" or "eia(0)" i.e., string.
+        if context.lower().startswith('eia('):
+            index = int(context[4:-1])
+            mxnet_context.append(mx.eia(index))
+        elif context.lower().startswith('gpu('):
+            index = int(context[4:-1])
+            mxnet_context.append(mx.gpu(index))
+        elif context.lower() in mx.Context.devstr2type:
+            mxnet_context.append(mx.Context(context.lower()))
+        else:
+            raise ValueError("Invalid MXNet context provided - ", context)
+    else:
+        # If user has provided a list.
+        # List can be:
+        #   1. List of GPU IDs - [0, 1, 2, 3]
+        #   2. List of GPU context strings - ["gpu(0)", "gpu(1)"] or ["gpu0", "gpu1"]
+        #      Or, ["eia(0)", "eia(1)"]
+        for context_name in context:
+            if isinstance(context_name, Number):
+                mxnet_context.append(mx.gpu(context_name))
+            elif context_name.startswith('cpu'):
+                mxnet_context.append(mx.cpu())
+            elif context_name.startswith('gpu('):
+                index = int(context_name[4:-1])
+                mxnet_context.append(mx.gpu(index))
+            elif context_name.startswith('gpu'):
+                index = int(context_name[3:])
+                mxnet_context.append(mx.gpu(index))
+            elif context_name.startswith('eia('):
+                index = int(context_name[4:-1])
+                mxnet_context.append(mx.eia(index))
+            elif context_name.startswith('eia'):
+                index = int(context_name[3:])
+                mxnet_context.append(mx.eia(index))
+            else:
+                raise ValueError("Invalid MXNet context provided - ", context)
+
+    return mxnet_context
+
+
+class Context:
+    """Scope for managing the context/runtime.
+
+    # Example
+
+    ```python
+    from keras import backend as K
+    from keras.models import load_model
+
+    with K.Context("EIA"):
+        model = load_model('imagenet_vgg16.h5')
+
+    prediction = model.predict(input_data)
+    ```
+
+    """
+    def __init__(self, ctx):
+        self.scope_ctx = _get_mxnet_context(ctx)
+
+    def __enter__(self):
+        global _CURRENT_SCOPE_CTX
+        _CURRENT_SCOPE_CTX = self.scope_ctx
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        global _CURRENT_SCOPE_CTX
+        _CURRENT_SCOPE_CTX = None
+
+
 def get_model():
     """Prepares Model class that can be used for training a Keras model with MXNet backend.
     Inherits and extends keras.engine.Model class.
@@ -5258,7 +5353,7 @@ def get_model():
             if 'kvstore' not in kwargs:
                 kwargs['kvstore'] = 'device'
 
-            self._context = self.get_mxnet_context(kwargs['context'])
+            self._context = _get_mxnet_context(kwargs['context'])
             self._kvstore = kwargs['kvstore']
 
             self._data_names = None
@@ -5372,26 +5467,33 @@ def get_model():
             self._auxs = {x: bind_values[x] for x in self._aux_names if x in bind_values}
             self._weights_dirty = False
 
-            # set the module
-            def sym_gen(phase):
-                if phase == 'train':
-                    return self._train_mxnet_symbol, self._data_names, self._label_names
-                elif phase == 'test':
-                    return self._test_mxnet_symbol, self._data_names, self._label_names
-                else:
-                    return self._pred_mxnet_symbol, self._data_names, None
+            if self._context and hasattr(self._context[0], 'device_type') and self._context[0].device_type == 'eia':
+                # Only Prediction is Supported with EIA Context
+                self._module = mx.mod.Module(self._pred_mxnet_symbol, data_names=self._data_names,
+                                             label_names=self._label_names, context=self._context[0],
+                                             fixed_param_names=self._fixed_weights)
+            else:
+                # set the module
+                def sym_gen(phase):
+                    if phase == 'train':
+                        return self._train_mxnet_symbol, self._data_names, self._label_names
+                    elif phase == 'test':
+                        return self._test_mxnet_symbol, self._data_names, self._label_names
+                    else:
+                        return self._pred_mxnet_symbol, self._data_names, None
 
-            self._module = mx.mod.BucketingModule(
-                sym_gen=sym_gen,
-                default_bucket_key='pred',
-                context=self._context,
-                fixed_param_names=self._fixed_weights)
+                self._module = mx.mod.BucketingModule(
+                    sym_gen=sym_gen,
+                    default_bucket_key='pred',
+                    context=self._context,
+                    fixed_param_names=self._fixed_weights)
+
             set_model(self)
             self.compiled = True
 
         def _adjust_module(self, inputs, phase):
             if not self._module:
-                raise RuntimeError('You must compile your model before using it.')
+                raise RuntimeError('MXNet Backend: You must compile your model before using it.')
             if self._num_data + self._num_label == len(inputs) - 1:
                 inputs = inputs[:-1]
             elif self._num_data == len(inputs) - 1:
@@ -5413,7 +5515,7 @@ def get_model():
 
             if not self._module.binded:
                 # allow prediction without compiling the model using different binding
-                if not self.compiled and phase == 'pred':
+                if phase == 'pred' and not self.compiled:
                     self._module.bind(data_shapes=data_shapes, label_shapes=None,
                                       for_training=False)
                     self._set_weights()
@@ -5422,13 +5524,22 @@ def get_model():
                     self._set_weights()
                     self._module.init_optimizer(kvstore=self._kvstore, optimizer=self.optimizer)
 
-            self._module.switch_bucket(phase, data_shapes, label_shapes)
+            # If context is EIA, we will be directly using Module rather than Bucketing Module.
+            # Hence, below specialization.
+            if isinstance(self._module, mx.mod.BucketingModule):
+                self._module.switch_bucket(phase, data_shapes, label_shapes)
 
-            # adjust module data shape
-            if inputs[0].shape[0] != self._module._curr_module._exec_group.batch_size:
-                self._module._curr_module.reshape(data_shapes, label_shapes)
-                assert inputs[0].shape[0] == self._module._curr_module._exec_group.batch_size, \
-                    'Reshape failed'
+                # adjust module data shape
+                if inputs[0].shape[0] != self._module._curr_module._exec_group.batch_size:
+                    self._module._curr_module.reshape(data_shapes, label_shapes)
+                    assert inputs[0].shape[0] == self._module._curr_module._exec_group.batch_size, \
+                        'Reshape failed'
+            else:
+                # adjust module data shape
+                if inputs[0].shape[0] != self._module._exec_group.batch_size:
+                    self._module.reshape(data_shapes, label_shapes)
+                    assert inputs[0].shape[0] == self._module._exec_group.batch_size, \
+                        'Reshape failed'
 
             return data, label, phase, data_shapes, label_shapes
 
@@ -5488,6 +5599,11 @@ def get_model():
                 outs = self._module.get_outputs()[:self._ntrain]
                 return [x.asnumpy().mean() for x in outs]
 
+            # If context is EIA this should not be supported
+            if self._context and hasattr(self._context[0], 'device_type') and self._context[0].device_type == 'eia':
+                raise RuntimeError('MXNet Backend: Model training is not supported with MXNet EIA context.'
+                                   'Use CPU/GPU.')
+
             self.train_function = train_function
 
         def _make_test_function(self):
@@ -5504,6 +5620,10 @@ def get_model():
                 outs = self._module.get_outputs()[:self._ntrain]
                 return [x.asnumpy().mean() for x in outs]
 
+            # If context is EIA this should not be supported
+            if self._context and hasattr(self._context[0], 'device_type') and self._context[0].device_type == 'eia':
+                raise RuntimeError(
+                    'MXNet Backend: Model Testing is not supported with MXNet EIA context. Use CPU/GPU.')
             self.test_function = test_function
 
         def _make_predict_function(self):
@@ -5557,79 +5677,44 @@ def get_model():
             self._weights_dirty = False
 
             # set module for prediction only
-            def sym_gen(phase):
-                return self._pred_mxnet_symbol, self._data_names, None
-
-            # separate module for using predict without compiling model
-            self._predict_only_module = mx.mod.BucketingModule(
-                sym_gen=sym_gen,
-                default_bucket_key='pred',
-                context=self._context,
-                fixed_param_names=self._fixed_weights)
-
-        @staticmethod
-        def get_mxnet_context(context):
-            mxnet_context = []
-
-            if context is None:
-                # If user does not provide any context, if GPUs are detected, by default it runs on first available
-                # GPU device. If not GPUs are detected, then it falls back to CPU.
-                try:
-                    gpus = mx.test_utils.list_gpus()
-                except CalledProcessError:
-                    gpus = []
-                if gpus and len(gpus) > 0:
-                    mxnet_context.append(mx.gpu(gpus[0]))
-                else:
-                    mxnet_context.append(mx.current_context())
-            elif isinstance(context, Number):
-                # If user provides number of GPUs to use, set context accordingly.
-                if context == 0:
-                    mxnet_context.append(mx.current_context())
-                else:
-                    for gpu_id in range(0, context):
-                        mxnet_context.append(mx.gpu(gpu_id))
-            elif isinstance(context, str):
-                # If user provides GPU context in the format - "gpu(0)" i.e., string.
-                mxnet_context.append(context)
+            if self._context and hasattr(self._context[0], 'device_type') and self._context[0].device_type == 'eia':
+                # Only Prediction is Supported with EI Context
+                self._predict_only_module = mx.mod.Module(self._pred_mxnet_symbol, data_names=self._data_names,
+                                             label_names=self._label_names, context=self._context[0],
+                                             fixed_param_names=self._fixed_weights)
             else:
-                # If user has provided a list.
-                # List can be:
-                #   1. List of GPU IDs - [0, 1, 2, 3]
-                #   2. List of GPU context strings - ["gpu(0)", "gpu(1)"]
-                for context_name in context:
-                    if isinstance(context_name, Number):
-                        mxnet_context.append(mx.gpu(context_name))
-                    elif context_name.startswith('cpu'):
-                        mxnet_context.append(mx.cpu())
-                    elif context_name.startswith('gpu('):
-                        index = int(context_name[4:-1])
-                        mxnet_context.append(mx.gpu(index))
-                    elif context_name.startswith('gpu'):
-                        index = int(context_name[3:])
-                        mxnet_context.append(mx.gpu(index))
+                def sym_gen(phase):
+                    return self._pred_mxnet_symbol, self._data_names, None
 
-            return mxnet_context
+                # separate module for using predict without compiling model
+                self._predict_only_module = mx.mod.BucketingModule(
+                    sym_gen=sym_gen,
+                    default_bucket_key='pred',
+                    context=self._context,
+                    fixed_param_names=self._fixed_weights)
 
-        def set_mxnet_context(self, gpus):
+        def set_mxnet_context(self, context):
             """Sets the mxnet context for the current Model.
 
             # Arguments
-                gpus: Integer >= 2 or list of integers, number of GPUs or
+                context: Integer >= 2 or list of integers, number of GPUs or
                       list of GPU IDs on which to create model replicas.
             """
-            if isinstance(gpus, (list, tuple)):
-                if len(gpus) <= 1:
+            if isinstance(context, (list, tuple)):
+                if len(context) <= 1:
                     raise ValueError('MXNet Backend: For multi-gpu usage to be effective, '
                                      'call `multi_gpu_model` with `len(gpus) >= 2`. '
-                                     'Received: `gpus=%s`' % gpus)
+                                     'Received: `gpus=%s`' % context)
+            elif isinstance(context, str):
+                if not context.lower().startswith('eia'):
+                    raise ValueError('MXNet Backend: Invalid context provided - %s' % context)
             else:
-                if gpus <= 1:
+                if context <= 1:
                     raise ValueError('MXNet Backend: For multi-gpu usage to be effective, '
                                      'call `multi_gpu_model` with `gpus >= 2`. '
-                                     'Received: `gpus=%d`' % gpus)
+                                     'Received: `gpus=%d`' % context)
 
-            self._context = self.get_mxnet_context(gpus)
+            self._context = _get_mxnet_context(context)
 
     return Model
 
