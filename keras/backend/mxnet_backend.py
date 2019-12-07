@@ -5401,7 +5401,7 @@ def get_model():
 
             # If context is passed in kwargs
             if 'context' in kwargs:
-                self._context = self.get_mxnet_context(kwargs['context'])
+                self._context = _get_mxnet_context(kwargs['context'])
 
             if self.built:
                 self._num_data = len(self.inputs)
@@ -5706,7 +5706,7 @@ def get_model():
                                      'call `multi_gpu_model` with `len(gpus) >= 2`. '
                                      'Received: `gpus=%s`' % context)
             elif isinstance(context, str):
-                if not context.lower().startswith('eia'):
+                if not context.lower().startswith(('eia', 'cpu', 'gpu')):
                     raise ValueError('MXNet Backend: Invalid context provided - %s' % context)
             else:
                 if context <= 1:
