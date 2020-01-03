@@ -9,6 +9,7 @@ from subprocess import CalledProcessError
 from numbers import Number
 from functools import wraps
 from collections import defaultdict
+from mxnet import MXNetError
 
 from .common import floatx, epsilon, image_data_format
 
@@ -5241,7 +5242,7 @@ def _get_mxnet_context(context):
         # GPU device. If not GPUs are detected, then it falls back to CPU.
         try:
             gpus = mx.test_utils.list_gpus()
-        except CalledProcessError:
+        except (CalledProcessError, MXNetError):
             gpus = []
         if gpus and len(gpus) > 0:
             mxnet_context.append(mx.gpu(gpus[0]))
