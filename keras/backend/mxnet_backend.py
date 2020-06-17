@@ -2415,17 +2415,27 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
     return x
 
 
-def stack(x, axis=0):
+@keras_mxnet_symbol
+def stack(tensors, axis=0):
     """Stacks a list of rank `R` tensors into a rank `R+1` tensor.
-
+     
     # Arguments
-        x: List of tensors.
+        tensors: List of tensors.
         axis: Axis along which to perform stacking.
-
+        
     # Returns
         A tensor.
     """
-    raise NotImplementedError('MXNet Backend: Stack operation is not supported yet.')
+    if axis < 0:
+        rank = ndim(tensors[0])
+        if rank:
+            axis %= rank
+        else:
+            axis = 0
+            
+    symbols = [t.symbol for t in tensors]
+    
+    return KerasSymbol(mx.sym.stack(*symbols, axis=axis))
 
 
 @keras_mxnet_symbol
