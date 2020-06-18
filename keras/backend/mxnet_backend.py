@@ -2426,15 +2426,7 @@ def stack(tensors, axis=0):
     # Returns
         A tensor.
     """
-    if axis < 0:
-        rank = ndim(tensors[0])
-        if rank:
-            axis %= rank
-        else:
-            axis = 0
-            
     symbols = [t.symbol for t in tensors]
-    
     return KerasSymbol(mx.sym.stack(*symbols, axis=axis))
 
 

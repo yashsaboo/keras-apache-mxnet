@@ -1759,6 +1759,32 @@ class TestBackend(object):
 
         assert np.allclose(log_prob_truth, log_prob_pred)
 
+
+    def test_stack(self):
+        data_1 = np.array([[0, 1, 2, 3], [4, 5, 6, 7]])
+        data_2 = np.array([[8, 9, 10, 11], [12, 13, 14, 15]])
+        var_1 = K.variable(data_1)
+        var_2 = K.variable(data_2)
+
+        stacked_values_symbol = K.stack([var_1, var_2], axis=0)
+        stacked_values = K.eval(stacked_values_symbol)
+        assert isinstance(stacked_values, np.ndarray)
+        expected_stacked_values = np.array([
+            [[0, 1, 2, 3], [4, 5, 6, 7]],
+            [[8, 9, 10, 11], [12, 13, 14, 15]]
+        ])
+        assert np.allclose(expected_stacked_values, stacked_values)
+
+        stacked_values_symbol = K.stack([var_1, var_2], axis=-1)
+        stacked_values = K.eval(stacked_values_symbol)
+        assert isinstance(stacked_values, np.ndarray)
+        expected_stacked_values = np.array([
+            [[0, 8], [1, 9], [2, 10], [3, 11]],
+            [[4, 12], [5, 13], [6, 14], [7, 15]]
+        ])
+        assert np.allclose(expected_stacked_values, stacked_values)
+
+
     def test_one_hot(self):
         input_length = 10
         num_classes = 20
