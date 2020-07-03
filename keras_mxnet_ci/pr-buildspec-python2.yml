@@ -11,7 +11,7 @@ phases:
       echo "Installing MXNet";
       apt-get update;
       pip install --upgrade pip;
-      pip install mxnet --pre;
+      pip install mxnet==1.6.0;
       echo "Installing Tensorflow";
       pip install tensorflow==1.15.0;
       echo "Installing Theano";
@@ -22,7 +22,7 @@ phases:
       pip install pydot;
       pip install nose;
       pip3 install PyYAML==3.13;
-      pip3 install pytest==3.6.3;
+      pip3 install pytest>=4.6;
       pip3 install pytest-xdist==1.22.2;
       echo "Installing Keras from source";
       pip install -e .[visualize,tests];

@@ -12,7 +12,7 @@ phases:
       apt-get update;
       apt-get install python3.7-dev;
       python3.7 -m pip install pip;
-      python3.7 -m pip install mxnet --pre;
+      python3.7 -m pip install mxnet==1.6.0;
       echo "Installing Tensorflow";
       python3.7 -m pip install tensorflow==1.15.0;
       echo "Installing Theano";
@@ -23,7 +23,7 @@ phases:
       python3.7 -m pip install pydot;
       python3.7 -m pip install nose;
       python3.7 -m pip install --ignore-installed PyYAML==3.13;
-      python3.7 -m pip install pytest==3.6.3;
+      python3.7 -m pip install pytest>=4.6;
       python3.7 -m pip install pytest-xdist==1.22.2;
       echo "Installing Keras from source";
       python3.7 -m pip install -e .[visualize,tests];

@@ -27,6 +27,12 @@ from keras import backend as K
 pytestmark = pytest.mark.skipif(
     K.backend() == 'tensorflow',
     reason='Temporarily disabled until the use_multiprocessing problem is solved')
+
+pytestmark = pytest.mark.skipif(
+    K.backend() == 'mxnet',
+    reason='Disable due to pytest-xdist flaky multi-thread problem in CI environment,'
+           'see also https://github.com/pytest-dev/pytest-xdist/issues/60')
+
 if sys.version_info < (3,):
     def next(x):
         return x.next()
