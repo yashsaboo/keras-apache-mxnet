@@ -1000,13 +1000,13 @@ def test_sequential_lstm_mxnet_model_saving_with_sparse_embedding():
     print("Y shape - ", y.shape)
     model.fit(x, y, batch_size=batch_size, epochs=2)
 
-    save_mxnet_model(model, prefix='test_lstm', epoch=0)
+    data_names, _ = save_mxnet_model(model, prefix='test_lstm', epoch=0)
 
     # Import with MXNet and try to perform inference
     import mxnet as mx
     sym, arg_params, aux_params = mx.model.load_checkpoint(prefix='test_lstm', epoch=0)
-    mod = mx.mod.Module(symbol=sym, data_names=['/embedding_1_input1'], context=mx.cpu(), label_names=None)
-    mod.bind(for_training=False, data_shapes=[('/embedding_1_input1', (1, 80))], label_shapes=mod._label_shapes)
+    mod = mx.mod.Module(symbol=sym, data_names=data_names, context=mx.cpu(), label_names=None)
+    mod.bind(for_training=False, data_shapes=[(data_names[0], (1, 80))], label_shapes=mod._label_shapes)
     mod.set_params(arg_params, aux_params, allow_missing=True)
     data_iter = mx.io.NDArrayIter([mx.nd.random.normal(shape=(1, 80))], label=None, batch_size=1)
     mod.predict(data_iter)
